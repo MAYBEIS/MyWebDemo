@@ -1,118 +1,66 @@
 /**
  * 博客文章服务层
  * 处理文章的 CRUD 操作
+ * 使用 Prisma 连接数据库
  */
+
+import prisma from './prisma'
 
 // 文章类型定义
 export interface Post {
-  id: string;
-  slug: string;
-  title: string;
-  content: string;
-  excerpt?: string;
-  category?: string;
-  tags?: string[];
-  coverImage?: string;
-  authorId: string;
-  authorName?: string;
-  createdAt: string;
-  updatedAt: string;
-  published: boolean;
-  views?: number;
-  likes?: number;
+  id: string
+  slug: string
+  title: string
+  content: string
+  excerpt?: string | null
+  category?: string | null
+  tags?: string[]
+  coverImage?: string | null
+  authorId: string
+  authorName?: string
+  createdAt: Date
+  updatedAt: Date
+  published: boolean
+  views: number
+  likes: number
 }
 
 export interface CreatePostInput {
-  title: string;
-  content: string;
-  excerpt?: string;
-  category?: string;
-  tags?: string[];
-  coverImage?: string;
-  authorId: string;
+  title: string
+  content: string
+  excerpt?: string
+  category?: string
+  tags?: string[]
+  coverImage?: string
+  authorId: string
 }
 
 export interface UpdatePostInput {
-  title?: string;
-  content?: string;
-  excerpt?: string;
-  category?: string;
-  tags?: string[];
-  coverImage?: string;
-  published?: boolean;
+  title?: string
+  content?: string
+  excerpt?: string
+  category?: string
+  tags?: string[]
+  coverImage?: string
+  published?: boolean
 }
 
 export interface GetPostsOptions {
-  page?: number;
-  limit?: number;
-  category?: string;
-  tag?: string;
-  search?: string;
+  page?: number
+  limit?: number
+  category?: string
+  tag?: string
+  search?: string
 }
-
-// 临时数据存储（生产环境应使用数据库）
-let posts: Post[] = [
-  {
-    id: '1',
-    slug: 'nextjs-app-router-introduction',
-    title: 'Next.js App Router 完全指南',
-    content: '# Next.js App Router 简介\n\nApp Router 是 Next.js 13 引入的新路由系统...',
-    excerpt: '深入了解 Next.js App Router 的工作原理和最佳实践',
-    category: '前端开发',
-    tags: ['Next.js', 'React', '前端'],
-    coverImage: '/images/blog/nextjs.jpg',
-    authorId: '1',
-    authorName: '管理员',
-    createdAt: '2024-01-15T10:00:00Z',
-    updatedAt: '2024-01-15T10:00:00Z',
-    published: true,
-    views: 1250,
-    likes: 89,
-  },
-  {
-    id: '2',
-    slug: 'typescript-best-practices',
-    title: 'TypeScript 最佳实践',
-    content: '# TypeScript 类型系统\n\nTypeScript 提供了强大的类型系统...',
-    excerpt: '掌握 TypeScript 的核心概念和实用技巧',
-    category: '编程语言',
-    tags: ['TypeScript', 'JavaScript', '类型系统'],
-    coverImage: '/images/blog/typescript.jpg',
-    authorId: '1',
-    authorName: '管理员',
-    createdAt: '2024-01-20T14:30:00Z',
-    updatedAt: '2024-01-20T14:30:00Z',
-    published: true,
-    views: 980,
-    likes: 67,
-  },
-  {
-    id: '3',
-    slug: 'react-hooks-deep-dive',
-    title: 'React Hooks 深度解析',
-    content: '# useState 和 useEffect\n\nReact Hooks 改变了我们编写组件的方式...',
-    excerpt: '全面理解 React Hooks 的工作机制和使用场景',
-    category: '前端开发',
-    tags: ['React', 'Hooks', '状态管理'],
-    coverImage: '/images/blog/react.jpg',
-    authorId: '1',
-    authorName: '管理员',
-    createdAt: '2024-02-01T09:15:00Z',
-    updatedAt: '2024-02-01T09:15:00Z',
-    published: true,
-    views: 1567,
-    likes: 123,
-  },
-];
 
 /**
  * 获取文章列表
  */
 export async function getPosts(options: GetPostsOptions = {}): Promise<{
-  posts: Post[];
-  total: number;
-  page: number;
-  limit: number;
+  posts: Post[]
+  total: number
+  page: number
+  limit: number
 }> {
   const {
     page = 1,
@@ -120,84 +68,159 @@ export async function getPosts(options: GetPostsOptions = {}): Promise<{
     category,
     tag,
     search,
-  } = options;
+  } = options
 
-  let filteredPosts = [...posts];
+  // 构建查询条件
+  const where: any = {
+    published: true,
+  }
 
   // 按分类筛选
   if (category) {
-    filteredPosts = filteredPosts.filter(post => post.category === category);
+    where.category = category
   }
 
   // 按标签筛选
   if (tag) {
-    filteredPosts = filteredPosts.filter(post => 
-      post.tags?.includes(tag)
-    );
+    where.tags = {
+      some: { tag }
+    }
   }
 
   // 搜索筛选
   if (search) {
-    const searchLower = search.toLowerCase();
-    filteredPosts = filteredPosts.filter(post =>
-      post.title.toLowerCase().includes(searchLower) ||
-      post.excerpt?.toLowerCase().includes(searchLower) ||
-      post.content.toLowerCase().includes(searchLower)
-    );
+    where.OR = [
+      { title: { contains: search } },
+      { excerpt: { contains: search } },
+      { content: { contains: search } },
+    ]
   }
 
-  // 只返回已发布的文章
-  filteredPosts = filteredPosts.filter(post => post.published);
+  // 获取总数
+  const total = await prisma.post.count({ where })
 
-  // 按创建时间倒序排列
-  filteredPosts.sort((a, b) => 
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  // 获取分页数据
+  const posts = await prisma.post.findMany({
+    where,
+    include: {
+      author: {
+        select: { name: true }
+      },
+      tags: true,
+    },
+    orderBy: { createdAt: 'desc' },
+    skip: (page - 1) * limit,
+    take: limit,
+  })
 
-  // 分页
-  const startIndex = (page - 1) * limit;
-  const endIndex = startIndex + limit;
-  const paginatedPosts = filteredPosts.slice(startIndex, endIndex);
+  // 转换为 Post 格式
+  const formattedPosts: Post[] = posts.map(post => ({
+    id: post.id,
+    slug: post.slug,
+    title: post.title,
+    content: post.content,
+    excerpt: post.excerpt,
+    category: post.category,
+    tags: post.tags.map(t => t.tag),
+    coverImage: post.coverImage,
+    authorId: post.authorId,
+    authorName: post.author.name,
+    createdAt: post.createdAt,
+    updatedAt: post.updatedAt,
+    published: post.published,
+    views: post.views,
+    likes: post.likes,
+  }))
 
   return {
-    posts: paginatedPosts,
-    total: filteredPosts.length,
+    posts: formattedPosts,
+    total,
     page,
     limit,
-  };
+  }
 }
 
 /**
  * 根据 slug 获取单篇文章
  */
 export async function getPostBySlug(slug: string): Promise<Post | null> {
-  const post = posts.find(p => p.slug === slug);
-  return post || null;
+  const post = await prisma.post.findUnique({
+    where: { slug },
+    include: {
+      author: {
+        select: { name: true }
+      },
+      tags: true,
+    },
+  })
+
+  if (!post) {
+    return null
+  }
+
+  return {
+    id: post.id,
+    slug: post.slug,
+    title: post.title,
+    content: post.content,
+    excerpt: post.excerpt,
+    category: post.category,
+    tags: post.tags.map(t => t.tag),
+    coverImage: post.coverImage,
+    authorId: post.authorId,
+    authorName: post.author.name,
+    createdAt: post.createdAt,
+    updatedAt: post.updatedAt,
+    published: post.published,
+    views: post.views,
+    likes: post.likes,
+  }
 }
 
 /**
  * 创建新文章
  */
 export async function createPost(input: CreatePostInput): Promise<Post> {
-  const newPost: Post = {
-    id: Date.now().toString(),
-    slug: generateSlug(input.title),
-    title: input.title,
-    content: input.content,
-    excerpt: input.excerpt || generateExcerpt(input.content),
-    category: input.category,
-    tags: input.tags,
-    coverImage: input.coverImage,
-    authorId: input.authorId,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    published: true,
-    views: 0,
-    likes: 0,
-  };
+  const slug = generateSlug(input.title)
+  const excerpt = input.excerpt || generateExcerpt(input.content)
 
-  posts.unshift(newPost);
-  return newPost;
+  const post = await prisma.post.create({
+    data: {
+      slug,
+      title: input.title,
+      content: input.content,
+      excerpt,
+      category: input.category,
+      coverImage: input.coverImage,
+      authorId: input.authorId,
+      published: true,
+      tags: input.tags ? {
+        create: input.tags.map(tag => ({ tag }))
+      } : undefined,
+    },
+    include: {
+      author: { select: { name: true } },
+      tags: true,
+    },
+  })
+
+  return {
+    id: post.id,
+    slug: post.slug,
+    title: post.title,
+    content: post.content,
+    excerpt: post.excerpt,
+    category: post.category,
+    tags: post.tags.map(t => t.tag),
+    coverImage: post.coverImage,
+    authorId: post.authorId,
+    authorName: post.author.name,
+    createdAt: post.createdAt,
+    updatedAt: post.updatedAt,
+    published: post.published,
+    views: post.views,
+    likes: post.likes,
+  }
 }
 
 /**
@@ -207,59 +230,115 @@ export async function updatePost(
   slug: string,
   input: UpdatePostInput
 ): Promise<Post | null> {
-  const postIndex = posts.findIndex(p => p.slug === slug);
-  
-  if (postIndex === -1) {
-    return null;
-  }
+  // 先查找文章
+  const existingPost = await prisma.post.findUnique({
+    where: { slug },
+  })
 
-  const updatedPost: Post = {
-    ...posts[postIndex],
-    ...input,
-    updatedAt: new Date().toISOString(),
-  };
+  if (!existingPost) {
+    return null
+  }
 
   // 如果标题改变，更新 slug
-  if (input.title && input.title !== posts[postIndex].title) {
-    updatedPost.slug = generateSlug(input.title);
-  }
+  const newSlug = input.title ? generateSlug(input.title) : slug
 
-  posts[postIndex] = updatedPost;
-  return updatedPost;
+  // 更新文章
+  const post = await prisma.post.update({
+    where: { slug },
+    data: {
+      ...input,
+      slug: newSlug,
+      updatedAt: new Date(),
+      // 更新标签
+      ...(input.tags && {
+        tags: {
+          deleteMany: {},
+          create: input.tags.map(tag => ({ tag })),
+        },
+      }),
+    },
+    include: {
+      author: { select: { name: true } },
+      tags: true,
+    },
+  })
+
+  return {
+    id: post.id,
+    slug: post.slug,
+    title: post.title,
+    content: post.content,
+    excerpt: post.excerpt,
+    category: post.category,
+    tags: post.tags.map(t => t.tag),
+    coverImage: post.coverImage,
+    authorId: post.authorId,
+    authorName: post.author.name,
+    createdAt: post.createdAt,
+    updatedAt: post.updatedAt,
+    published: post.published,
+    views: post.views,
+    likes: post.likes,
+  }
 }
 
 /**
  * 删除文章
  */
 export async function deletePost(slug: string): Promise<boolean> {
-  const postIndex = posts.findIndex(p => p.slug === slug);
-  
-  if (postIndex === -1) {
-    return false;
+  try {
+    await prisma.post.delete({
+      where: { slug },
+    })
+    return true
+  } catch (error) {
+    return false
   }
-
-  posts.splice(postIndex, 1);
-  return true;
 }
 
 /**
  * 增加文章浏览量
  */
 export async function incrementViews(slug: string): Promise<void> {
-  const post = posts.find(p => p.slug === slug);
-  if (post) {
-    post.views = (post.views || 0) + 1;
-  }
+  await prisma.post.update({
+    where: { slug },
+    data: { views: { increment: 1 } },
+  })
 }
 
 /**
  * 增加文章点赞数
  */
 export async function incrementLikes(slug: string): Promise<void> {
-  const post = posts.find(p => p.slug === slug);
-  if (post) {
-    post.likes = (post.likes || 0) + 1;
-  }
+  await prisma.post.update({
+    where: { slug },
+    data: { likes: { increment: 1 } },
+  })
+}
+
+/**
+ * 获取所有分类
+ */
+export async function getCategories(): Promise<string[]> {
+  const categories = await prisma.post.findMany({
+    where: { published: true },
+    select: { category: true },
+    distinct: ['category'],
+  })
+  return categories
+    .map(c => c.category)
+    .filter((c): c is string => c !== null)
+}
+
+/**
+ * 获取所有标签
+ */
+export async function getTags(): Promise<string[]> {
+  const tags = await prisma.postTag.findMany({
+    distinct: ['tag'],
+    select: { tag: true },
+  })
+  return tags.map(t => t.tag)
 }
 
 /**
@@ -271,7 +350,7 @@ function generateSlug(title: string): string {
     .trim()
     .replace(/[^\w\s-]/g, '')
     .replace(/[\s_-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/^-+|-+$/g, '')
 }
 
 /**
@@ -286,11 +365,11 @@ function generateExcerpt(content: string, maxLength: number = 150): string {
     .replace(/`/g, '')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     .replace(/\n/g, ' ')
-    .trim();
+    .trim()
 
   if (plainText.length <= maxLength) {
-    return plainText;
+    return plainText
   }
 
-  return plainText.substring(0, maxLength).trim() + '...';
+  return plainText.substring(0, maxLength).trim() + '...'
 }

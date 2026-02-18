@@ -1,66 +1,75 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getPosts, createPost } from '@/lib/posts-service';
+import { NextRequest, NextResponse } from 'next/server'
+import { getPosts, createPost } from '@/lib/posts-service'
+import { getCurrentUser } from '@/lib/auth-service'
 
 /**
  * GET /api/posts
- * 获取所有博客文章列表
+ * GET /api/posts?category=xxx&tag=xxx&search=xxx&page=1&limit=10
+ * 1. category: string - Optional - Filter by category
+ * 2. tag: string - Optional - Filter by tag
+ * 3. search: string - Optional - Search in title, excerpt, content
+ * 4. page: number - Optional - Page number (default: 1)
+ * 5. limit: number - Optional - Items per page (default: 10)
+ * Response: { success: boolean, data: { posts: Post[], total: number, page: number, limit: number } }
  */
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
-    const category = searchParams.get('category');
+    const searchParams = request.nextUrl.searchParams
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '10')
+    const category = searchParams.get('category') || undefined
+    const tag = searchParams.get('tag') || undefined
+    const search = searchParams.get('search') || undefined
 
-    const posts = await getPosts({ page, limit, category });
-    
+    const result = await getPosts({ page, limit, category, tag, search })
+
     return NextResponse.json({
       success: true,
-      data: posts,
-    });
+      data: result,
+    })
   } catch (error) {
-    console.error('获取文章列表失败:', error);
+    console.error('GET /api/posts error:', error)
     return NextResponse.json(
-      { success: false, error: '获取文章列表失败' },
+      { success: false, error: 'Failed to get posts' },
       { status: 500 }
-    );
+    )
   }
 }
 
 /**
  * POST /api/posts
- * 创建新的博客文章（需要认证）
+ * Create a new post (requires authentication)
+ * Request body: { title: string, content: string, excerpt?: string, category?: string, tags?: string[], coverImage?: string }
+ * Response: { success: boolean, data: Post }
  */
 export async function POST(request: NextRequest) {
   try {
-    // 验证用户认证
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Verify user authentication
+    const user = await getCurrentUser(request)
+
+    if (!user) {
       return NextResponse.json(
-        { success: false, error: '未授权访问' },
+        { success: false, error: 'Unauthorized' },
         { status: 401 }
-      );
+      )
     }
 
-    const token = authHeader.substring(7);
-    const user = await verifyToken(token);
-    
-    if (!user || !user.isAdmin) {
+    if (!user.isAdmin) {
       return NextResponse.json(
-        { success: false, error: '权限不足' },
+        { success: false, error: 'Forbidden: Admin access required' },
         { status: 403 }
-      );
+      )
     }
 
-    const body = await request.json();
-    const { title, content, excerpt, category, tags, coverImage } = body;
+    const body = await request.json()
+    const { title, content, excerpt, category, tags, coverImage } = body
 
-    // 验证必填字段
+    // Validate required fields
     if (!title || !content) {
       return NextResponse.json(
-        { success: false, error: '标题和内容不能为空' },
+        { success: false, error: 'Title and content are required' },
         { status: 400 }
-      );
+      )
     }
 
     const post = await createPost({
@@ -71,23 +80,20 @@ export async function POST(request: NextRequest) {
       tags,
       coverImage,
       authorId: user.id,
-    });
+    })
 
-    return NextResponse.json({
-      success: true,
-      data: post,
-    }, { status: 201 });
-  } catch (error) {
-    console.error('创建文章失败:', error);
     return NextResponse.json(
-      { success: false, error: '创建文章失败' },
+      {
+        success: true,
+        data: post,
+      },
+      { status: 201 }
+    )
+  } catch (error) {
+    console.error('POST /api/posts error:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to create post' },
       { status: 500 }
-    );
+    )
   }
-}
-
-// 临时导入，后续会移到独立的认证模块
-async function verifyToken(token: string) {
-  // TODO: 实现 JWT 验证逻辑
-  return { id: '1', isAdmin: true };
 }

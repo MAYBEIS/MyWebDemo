@@ -45,8 +45,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 设置 cookie
-    response.cookies.set('auth-token', token, {
+    // 设置 cookie（使用下划线命名以匹配 auth-service）
+    response.cookies.set('auth_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',

@@ -1,126 +1,179 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getPostBySlug, updatePost, deletePost } from '@/lib/posts-service';
+import { NextRequest, NextResponse } from 'next/server'
+import {
+  getPostBySlug,
+  updatePost,
+  deletePost,
+  incrementViews,
+  incrementLikes,
+} from '@/lib/posts-service'
+import { getCurrentUser } from '@/lib/auth-service'
+
+interface RouteParams {
+  params: Promise<{ slug: string }>
+}
 
 /**
  * GET /api/posts/[slug]
- * 获取单篇博客文章详情
+ * Get a single post by slug
+ * Response: { success: boolean, data: Post }
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { slug: string } }
-) {
+export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const post = await getPostBySlug(params.slug);
-    
+    const { slug } = await params
+    const post = await getPostBySlug(slug)
+
     if (!post) {
       return NextResponse.json(
-        { success: false, error: '文章不存在' },
+        { success: false, error: 'Post not found' },
         { status: 404 }
-      );
+      )
     }
+
+    // Increment view count
+    await incrementViews(slug)
 
     return NextResponse.json({
       success: true,
       data: post,
-    });
+    })
   } catch (error) {
-    console.error('获取文章详情失败:', error);
+    console.error('GET /api/posts/[slug] error:', error)
     return NextResponse.json(
-      { success: false, error: '获取文章详情失败' },
+      { success: false, error: 'Failed to get post' },
       { status: 500 }
-    );
+    )
   }
 }
 
 /**
  * PUT /api/posts/[slug]
- * 更新博客文章（需要认证）
+ * Update a post (requires authentication)
+ * Request body: { title?: string, content?: string, excerpt?: string, category?: string, tags?: string[], coverImage?: string, published?: boolean }
+ * Response: { success: boolean, data: Post }
  */
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { slug: string } }
-) {
+export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    // 验证用户认证
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const { slug } = await params
+
+    // Verify user authentication
+    const user = await getCurrentUser(request)
+
+    if (!user) {
       return NextResponse.json(
-        { success: false, error: '未授权访问' },
+        { success: false, error: 'Unauthorized' },
         { status: 401 }
-      );
+      )
     }
 
-    const token = authHeader.substring(7);
-    const user = await verifyToken(token);
-    
-    if (!user || !user.isAdmin) {
+    if (!user.isAdmin) {
       return NextResponse.json(
-        { success: false, error: '权限不足' },
+        { success: false, error: 'Forbidden: Admin access required' },
         { status: 403 }
-      );
+      )
     }
 
-    const body = await request.json();
-    const post = await updatePost(params.slug, body);
+    const body = await request.json()
+    const post = await updatePost(slug, body)
+
+    if (!post) {
+      return NextResponse.json(
+        { success: false, error: 'Post not found' },
+        { status: 404 }
+      )
+    }
 
     return NextResponse.json({
       success: true,
       data: post,
-    });
+    })
   } catch (error) {
-    console.error('更新文章失败:', error);
+    console.error('PUT /api/posts/[slug] error:', error)
     return NextResponse.json(
-      { success: false, error: '更新文章失败' },
+      { success: false, error: 'Failed to update post' },
       { status: 500 }
-    );
+    )
   }
 }
 
 /**
  * DELETE /api/posts/[slug]
- * 删除博客文章（需要认证）
+ * Delete a post (requires authentication)
+ * Response: { success: boolean, message: string }
  */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { slug: string } }
-) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    // 验证用户认证
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const { slug } = await params
+
+    // Verify user authentication
+    const user = await getCurrentUser(request)
+
+    if (!user) {
       return NextResponse.json(
-        { success: false, error: '未授权访问' },
+        { success: false, error: 'Unauthorized' },
         { status: 401 }
-      );
+      )
     }
 
-    const token = authHeader.substring(7);
-    const user = await verifyToken(token);
-    
-    if (!user || !user.isAdmin) {
+    if (!user.isAdmin) {
       return NextResponse.json(
-        { success: false, error: '权限不足' },
+        { success: false, error: 'Forbidden: Admin access required' },
         { status: 403 }
-      );
+      )
     }
 
-    await deletePost(params.slug);
+    const deleted = await deletePost(slug)
+
+    if (!deleted) {
+      return NextResponse.json(
+        { success: false, error: 'Post not found' },
+        { status: 404 }
+      )
+    }
 
     return NextResponse.json({
       success: true,
-      message: '文章删除成功',
-    });
+      message: 'Post deleted successfully',
+    })
   } catch (error) {
-    console.error('删除文章失败:', error);
+    console.error('DELETE /api/posts/[slug] error:', error)
     return NextResponse.json(
-      { success: false, error: '删除文章失败' },
+      { success: false, error: 'Failed to delete post' },
       { status: 500 }
-    );
+    )
   }
 }
 
-// 临时导入，后续会移到独立的认证模块
-async function verifyToken(token: string) {
-  // TODO: 实现 JWT 验证逻辑
-  return { id: '1', isAdmin: true };
+/**
+ * PATCH /api/posts/[slug]
+ * Partial update (e.g., like a post)
+ * Request body: { action: 'like' }
+ * Response: { success: boolean, data: { likes: number } }
+ */
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  try {
+    const { slug } = await params
+    const body = await request.json()
+    const { action } = body
+
+    if (action === 'like') {
+      await incrementLikes(slug)
+      const post = await getPostBySlug(slug)
+
+      return NextResponse.json({
+        success: true,
+        data: { likes: post?.likes || 0 },
+      })
+    }
+
+    return NextResponse.json(
+      { success: false, error: 'Invalid action' },
+      { status: 400 }
+    )
+  } catch (error) {
+    console.error('PATCH /api/posts/[slug] error:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to update post' },
+      { status: 500 }
+    )
+  }
 }

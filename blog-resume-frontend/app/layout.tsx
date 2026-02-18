@@ -1,11 +1,10 @@
 import type { Metadata, Viewport } from 'next'
-import { JetBrains_Mono, Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from 'sonner'
 import './globals.css'
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
+// 使用系统字体栈，避免网络依赖
+// 生产环境可以切换回 Google Fonts
 
 export const metadata: Metadata = {
   title: 'SysLog | 系统程序员 & 技术写作者',
@@ -42,7 +41,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
+      <body className="font-sans antialiased">
         {children}
         <Toaster
           position="top-right"
