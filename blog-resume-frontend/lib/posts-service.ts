@@ -71,6 +71,7 @@ export async function getPosts(options: GetPostsOptions = {}): Promise<{
   } = options
 
   // 构建查询条件
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {
     published: true,
   }
@@ -114,14 +115,14 @@ export async function getPosts(options: GetPostsOptions = {}): Promise<{
   })
 
   // 转换为 Post 格式
-  const formattedPosts: Post[] = posts.map(post => ({
+  const formattedPosts: Post[] = posts.map((post) => ({
     id: post.id,
     slug: post.slug,
     title: post.title,
     content: post.content,
     excerpt: post.excerpt,
     category: post.category,
-    tags: post.tags.map(t => t.tag),
+    tags: post.tags.map((t) => t.tag),
     coverImage: post.coverImage,
     authorId: post.authorId,
     authorName: post.author.name,
@@ -165,7 +166,7 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
     content: post.content,
     excerpt: post.excerpt,
     category: post.category,
-    tags: post.tags.map(t => t.tag),
+    tags: post.tags.map((t) => t.tag),
     coverImage: post.coverImage,
     authorId: post.authorId,
     authorName: post.author.name,
@@ -195,7 +196,7 @@ export async function createPost(input: CreatePostInput): Promise<Post> {
       authorId: input.authorId,
       published: true,
       tags: input.tags ? {
-        create: input.tags.map(tag => ({ tag }))
+        create: input.tags.map((tag) => ({ tag }))
       } : undefined,
     },
     include: {
@@ -211,7 +212,7 @@ export async function createPost(input: CreatePostInput): Promise<Post> {
     content: post.content,
     excerpt: post.excerpt,
     category: post.category,
-    tags: post.tags.map(t => t.tag),
+    tags: post.tags.map((t) => t.tag),
     coverImage: post.coverImage,
     authorId: post.authorId,
     authorName: post.author.name,
@@ -253,7 +254,7 @@ export async function updatePost(
       ...(input.tags && {
         tags: {
           deleteMany: {},
-          create: input.tags.map(tag => ({ tag })),
+          create: input.tags.map((tag) => ({ tag })),
         },
       }),
     },
@@ -270,7 +271,7 @@ export async function updatePost(
     content: post.content,
     excerpt: post.excerpt,
     category: post.category,
-    tags: post.tags.map(t => t.tag),
+    tags: post.tags.map((t) => t.tag),
     coverImage: post.coverImage,
     authorId: post.authorId,
     authorName: post.author.name,
@@ -291,7 +292,7 @@ export async function deletePost(slug: string): Promise<boolean> {
       where: { slug },
     })
     return true
-  } catch (error) {
+  } catch {
     return false
   }
 }
@@ -326,7 +327,7 @@ export async function getCategories(): Promise<string[]> {
     distinct: ['category'],
   })
   return categories
-    .map(c => c.category)
+    .map((c) => c.category)
     .filter((c): c is string => c !== null)
 }
 
@@ -338,7 +339,7 @@ export async function getTags(): Promise<string[]> {
     distinct: ['tag'],
     select: { tag: true },
   })
-  return tags.map(t => t.tag)
+  return tags.map((t) => t.tag)
 }
 
 /**

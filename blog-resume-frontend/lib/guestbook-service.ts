@@ -6,6 +6,19 @@
 
 import prisma from './prisma'
 
+// 留言查询结果类型（包含作者信息）
+interface GuestbookWithAuthor {
+  id: string
+  message: string
+  authorId: string
+  createdAt: Date
+  updatedAt: Date
+  author: {
+    name: string
+    avatar: string | null
+  }
+}
+
 // 留言类型定义
 export interface GuestbookEntry {
   id: string
@@ -60,7 +73,7 @@ export async function getGuestbookEntries(
   })
 
   // 转换为 GuestbookEntry 格式
-  const formattedEntries: GuestbookEntry[] = entries.map((entry) => ({
+  const formattedEntries: GuestbookEntry[] = entries.map((entry: GuestbookWithAuthor) => ({
     id: entry.id,
     message: entry.message,
     authorId: entry.authorId,
