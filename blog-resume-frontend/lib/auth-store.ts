@@ -1,99 +1,263 @@
 "use client"
 
-import { useSyncExternalStore, useCallback } from "react"
+import { useSyncExternalStore, useEffect } from "react"
 
+// 用户类型定义
 export interface User {
   id: string
-  username: string
+  name: string
   email: string
-  avatar: string
-  bio: string
-  joinDate: string
-  role: "admin" | "user"
-  stats: {
-    posts: number
-    comments: number
-    likes: number
-  }
+  avatar: string | null
+  bio: string | null
+  isAdmin: boolean
 }
 
+// 认证状态
 interface AuthState {
   user: User | null
   isLoggedIn: boolean
+  isLoading: boolean
 }
 
+// 初始状态
 let state: AuthState = {
   user: null,
   isLoggedIn: false,
+  isLoading: true, // 初始加载状态
 }
 
+// 是否已初始化
+let isInitialized = false
+
+// 初始化 Promise，用于防止重复初始化
+let initPromise: Promise<void> | null = null
+
+// 监听器集合
 const listeners = new Set<() => void>()
 
+// 触发状态更新
 function emitChange() {
   for (const listener of listeners) {
     listener()
   }
 }
 
+// 订阅函数
 function subscribe(listener: () => void) {
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
 
+// 获取快照
 function getSnapshot() {
   return state
 }
 
-export function login(username: string, _email: string) {
-  const initials = username
-    .split(/[_\s]/)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2)
-
-  state = {
-    user: {
-      id: `user_${Date.now()}`,
-      username,
-      email: _email,
-      avatar: initials,
-      bio: "系统编程爱好者",
-      joinDate: new Date().toLocaleDateString("zh-CN", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      }),
-      role: "user",
-      stats: { posts: 0, comments: 0, likes: 0 },
-    },
-    isLoggedIn: true,
+// 获取服务端快照（用于 SSR）
+function getServerSnapshot() {
+  return {
+    user: null,
+    isLoggedIn: false,
+    isLoading: true,
   }
-  emitChange()
 }
 
-export function loginAsAdmin() {
-  state = {
-    user: {
-      id: "admin_001",
-      username: "SysLog",
-      email: "admin@syslog.dev",
-      avatar: "SL",
-      bio: "系统程序员 & 技术作者 | 探索内核、编译器与高性能计算的深度奥秘",
-      joinDate: "2024年1月1日",
-      role: "admin",
-      stats: { posts: 12, comments: 47, likes: 256 },
-    },
-    isLoggedIn: true,
+/**
+ * 从服务器获取当前用户信息
+ */
+async function fetchCurrentUser(): Promise<User | null> {
+  try {
+    const response = await fetch('/api/auth/me', {
+      credentials: 'include', // 包含 cookie
+      cache: 'no-store', // 不缓存
+    })
+    
+    if (!response.ok) {
+      return null
+    }
+    
+    const data = await response.json()
+    if (data.success && data.data) {
+      return {
+        id: data.data.id,
+        name: data.data.name,
+        email: data.data.email,
+        avatar: data.data.avatar,
+        bio: data.data.bio,
+        isAdmin: data.data.isAdmin,
+      }
+    }
+    return null
+  } catch (error) {
+    console.error('获取用户信息失败:', error)
+    return null
   }
-  emitChange()
 }
 
-export function logout() {
-  state = { user: null, isLoggedIn: false }
-  emitChange()
+/**
+ * 初始化认证状态（从服务器恢复登录状态）
+ */
+export async function initAuth(): Promise<void> {
+  // 如果已经初始化完成，直接返回
+  if (isInitialized) {
+    return
+  }
+
+  // 如果正在初始化，等待完成
+  if (initPromise) {
+    return initPromise
+  }
+
+  initPromise = (async () => {
+    try {
+      const user = await fetchCurrentUser()
+      state = {
+        user,
+        isLoggedIn: !!user,
+        isLoading: false,
+      }
+      isInitialized = true
+    } catch (error) {
+      console.error('初始化认证状态失败:', error)
+      state = {
+        user: null,
+        isLoggedIn: false,
+        isLoading: false,
+      }
+    }
+    emitChange()
+  })()
+
+  return initPromise
 }
 
+/**
+ * 登录函数 - 调用真实 API
+ */
+export async function login(email: string, password: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    state = { ...state, isLoading: true }
+    emitChange()
+
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ email, password }),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok || !data.success) {
+      state = { user: null, isLoggedIn: false, isLoading: false }
+      emitChange()
+      return { success: false, error: data.error || '登录失败' }
+    }
+
+    // 更新状态
+    state = {
+      user: {
+        id: data.data.user.id,
+        name: data.data.user.name,
+        email: data.data.user.email,
+        avatar: data.data.user.avatar || null,
+        bio: data.data.user.bio || null,
+        isAdmin: data.data.user.isAdmin,
+      },
+      isLoggedIn: true,
+      isLoading: false,
+    }
+    isInitialized = true
+    emitChange()
+
+    return { success: true }
+  } catch (error) {
+    console.error('登录失败:', error)
+    state = { user: null, isLoggedIn: false, isLoading: false }
+    emitChange()
+    return { success: false, error: '网络错误，请稍后重试' }
+  }
+}
+
+/**
+ * 注册函数 - 调用真实 API
+ */
+export async function register(
+  email: string,
+  password: string,
+  name: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    state = { ...state, isLoading: true }
+    emitChange()
+
+    const response = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ email, password, name }),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok || !data.success) {
+      state = { user: null, isLoggedIn: false, isLoading: false }
+      emitChange()
+      return { success: false, error: data.error || '注册失败' }
+    }
+
+    // 注册成功后自动登录
+    state = {
+      user: {
+        id: data.data.user.id,
+        name: data.data.user.name,
+        email: data.data.user.email,
+        avatar: data.data.user.avatar || null,
+        bio: data.data.user.bio || null,
+        isAdmin: data.data.user.isAdmin,
+      },
+      isLoggedIn: true,
+      isLoading: false,
+    }
+    isInitialized = true
+    emitChange()
+
+    return { success: true }
+  } catch (error) {
+    console.error('注册失败:', error)
+    state = { user: null, isLoggedIn: false, isLoading: false }
+    emitChange()
+    return { success: false, error: '网络错误，请稍后重试' }
+  }
+}
+
+/**
+ * 登出函数 - 调用真实 API
+ */
+export async function logout(): Promise<void> {
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+    })
+  } catch (error) {
+    console.error('登出失败:', error)
+  } finally {
+    // 无论 API 是否成功，都清除本地状态
+    state = { user: null, isLoggedIn: false, isLoading: false }
+    isInitialized = false
+    initPromise = null
+    emitChange()
+  }
+}
+
+/**
+ * 更新用户资料
+ */
 export function updateProfile(updates: Partial<User>) {
   if (!state.user) return
   state = {
@@ -103,19 +267,32 @@ export function updateProfile(updates: Partial<User>) {
   emitChange()
 }
 
-export function incrementStat(key: keyof User["stats"]) {
-  if (!state.user) return
-  state = {
-    ...state,
-    user: {
-      ...state.user,
-      stats: { ...state.user.stats, [key]: state.user.stats[key] + 1 },
-    },
-  }
-  emitChange()
+/**
+ * 使用认证状态的 Hook
+ */
+export function useAuth() {
+  const authState = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  
+  // 组件挂载时初始化认证状态
+  useEffect(() => {
+    if (!isInitialized) {
+      initAuth()
+    }
+  }, [])
+
+  return authState
 }
 
-export function useAuth() {
-  const authState = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-  return authState
+/**
+ * 检查是否已登录（用于路由保护）
+ */
+export function checkAuth(): boolean {
+  return state.isLoggedIn
+}
+
+/**
+ * 获取当前用户（同步方法）
+ */
+export function getCurrentUser(): User | null {
+  return state.user
 }

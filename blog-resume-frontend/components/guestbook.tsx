@@ -7,7 +7,18 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import Link from "next/link"
-import { useAuth, incrementStat } from "@/lib/auth-store"
+import { useAuth } from "@/lib/auth-store"
+
+// 获取用户头像首字母
+function getAvatarInitials(name: string, avatar: string | null): string {
+  if (avatar) return avatar
+  return name
+    .split(/[_\s]/)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
+}
 
 const initialMessages = [
   {
@@ -84,17 +95,16 @@ export function Guestbook() {
 
     const message = {
       id: Date.now(),
-      author: user!.username,
-      avatar: user!.avatar,
+      author: user!.name,
+      avatar: getAvatarInitials(user!.name, user!.avatar),
       message: newMessage,
       date: new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" }),
       likes: 0,
-      isAdmin: user!.role === "admin",
+      isAdmin: user!.isAdmin,
     }
 
     setMessages([message, ...messages])
     setNewMessage("")
-    incrementStat("comments")
     toast.success("留言成功！")
   }
 
@@ -132,9 +142,11 @@ export function Guestbook() {
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2 mb-1">
               <Avatar className="h-6 w-6 border border-border/30">
-                <AvatarFallback className="bg-primary/10 text-primary text-[9px] font-mono">{user.avatar}</AvatarFallback>
+                <AvatarFallback className="bg-primary/10 text-primary text-[9px] font-mono">
+                  {getAvatarInitials(user.name, user.avatar)}
+                </AvatarFallback>
               </Avatar>
-              <span className="text-sm text-foreground/70">{user.username}</span>
+              <span className="text-sm text-foreground/70">{user.name}</span>
             </div>
             <Textarea
               placeholder="留下你的想法、建议或任何想说的话..."
@@ -224,7 +236,7 @@ export function Guestbook() {
                     <Heart className={`h-3.5 w-3.5 ${likedMessages.has(msg.id) ? "fill-current" : ""}`} />
                     {msg.likes}
                   </button>
-                  {isLoggedIn && user && (user.role === "admin" || msg.author === user.username) && (
+                  {isLoggedIn && user && (user.isAdmin || msg.author === user.name) && (
                     <button
                       onClick={() => handleDelete(msg.id)}
                       className="flex items-center gap-1.5 text-xs text-muted-foreground/20 hover:text-destructive transition-colors duration-300 opacity-0 group-hover:opacity-100"

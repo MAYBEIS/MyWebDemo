@@ -7,8 +7,19 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
-import { useAuth, incrementStat } from "@/lib/auth-store"
+import { useAuth } from "@/lib/auth-store"
 import Link from "next/link"
+
+// 获取用户头像首字母
+function getAvatarInitials(name: string, avatar: string | null): string {
+  if (avatar) return avatar
+  return name
+    .split(/[_\s]/)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
+}
 
 interface Comment {
   id: number
@@ -200,8 +211,8 @@ export function ArticleComments() {
     }
     const comment: Comment = {
       id: Date.now(),
-      author: user!.username,
-      avatar: user!.avatar,
+      author: user!.name,
+      avatar: getAvatarInitials(user!.name, user!.avatar),
       date: "刚刚",
       content: newComment,
       likes: 0,
@@ -209,7 +220,6 @@ export function ArticleComments() {
     }
     setComments([...comments, comment])
     setNewComment("")
-    incrementStat("comments")
     toast.success("评论发表成功！")
   }
 
@@ -235,8 +245,8 @@ export function ArticleComments() {
     if (!user) return
     const reply: Comment = {
       id: Date.now(),
-      author: user.username,
-      avatar: user.avatar,
+      author: user.name,
+      avatar: getAvatarInitials(user.name, user.avatar),
       date: "刚刚",
       content,
       likes: 0,
@@ -249,7 +259,6 @@ export function ArticleComments() {
           : { ...c, replies: addReply(c.replies) }
       )
     setComments(addReply(comments))
-    incrementStat("comments")
     toast.success("回复成功！")
   }
 
@@ -270,13 +279,15 @@ export function ArticleComments() {
 
       {/* Comment form */}
       <div className="mb-10 rounded-xl border border-border/40 bg-card/30 p-6">
-        {isLoggedIn ? (
+        {isLoggedIn && user ? (
           <>
             <div className="flex items-center gap-3 mb-4">
               <Avatar className="h-8 w-8 border border-border/40">
-                <AvatarFallback className="bg-primary/10 text-primary text-xs font-mono">{user?.avatar}</AvatarFallback>
+                <AvatarFallback className="bg-primary/10 text-primary text-xs font-mono">
+                  {getAvatarInitials(user.name, user.avatar)}
+                </AvatarFallback>
               </Avatar>
-              <span className="text-sm font-medium text-foreground/80">{user?.username}</span>
+              <span className="text-sm font-medium text-foreground/80">{user.name}</span>
             </div>
             <Textarea
               placeholder="分享你的看法..."

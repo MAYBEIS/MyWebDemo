@@ -21,8 +21,19 @@ import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
-import { useAuth, incrementStat } from "@/lib/auth-store"
+import { useAuth } from "@/lib/auth-store"
 import Link from "next/link"
+
+// 获取用户头像首字母
+function getAvatarInitials(name: string, avatar: string | null): string {
+  if (avatar) return avatar
+  return name
+    .split(/[_\s]/)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
+}
 
 interface TopicComment {
   id: number
@@ -203,7 +214,6 @@ export function TrendingTopics() {
           ? { ...t, votes: t.votes + (direction === "up" ? 1 : -1), heat: Math.min(100, t.heat + 2) }
           : t
       ))
-      incrementStat("likes")
     }
   }
 
@@ -215,8 +225,8 @@ export function TrendingTopics() {
     if (!newCommentText.trim()) return
     const comment: TopicComment = {
       id: Date.now(),
-      author: user.username,
-      avatar: user.avatar,
+      author: user.name,
+      avatar: getAvatarInitials(user.name, user.avatar),
       content: newCommentText,
       time: "刚刚",
     }
@@ -226,7 +236,6 @@ export function TrendingTopics() {
         : t
     ))
     setNewCommentText("")
-    incrementStat("comments")
     toast.success("评论成功！")
   }
 

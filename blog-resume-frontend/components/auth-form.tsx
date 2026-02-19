@@ -1,50 +1,142 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Suspense } from "react"
-import { Terminal, Eye, EyeOff, Github, Mail } from "lucide-react"
+import { Terminal, Eye, EyeOff, Github, Mail, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { toast } from "sonner"
-import { login, loginAsAdmin } from "@/lib/auth-store"
+import { login, register, useAuth } from "@/lib/auth-store"
 
 function AuthFormInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { isLoggedIn, isLoading: authLoading } = useAuth()
+  
   const defaultTab = searchParams.get("tab") === "register" ? "register" : "login"
   const [activeTab, setActiveTab] = useState<"login" | "register">(defaultTab)
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  
+  // 表单字段
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
 
+  // 如果已登录，重定向到首页
+  useEffect(() => {
+    if (!authLoading && isLoggedIn) {
+      router.push("/")
+    }
+  }, [isLoggedIn, authLoading, router])
+
+  // 清除错误当切换标签或输入时
+  useEffect(() => {
+    setError(null)
+  }, [activeTab, email, password, username, confirmPassword])
+
+  // 表单验证
+  const validateForm = (): boolean => {
+    if (!email.trim()) {
+      setError("请输入邮箱地址")
+      return false
+    }
+    
+    // 简单的邮箱格式验证
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setError("请输入有效的邮箱地址")
+      return false
+    }
+
+    if (!password) {
+      setError("请输入密码")
+      return false
+    }
+
+    if (password.length < 6) {
+      setError("密码长度至少为 6 位")
+      return false
+    }
+
+    if (activeTab === "register") {
+      if (!username.trim()) {
+        setError("请输入用户名")
+        return false
+      }
+
+      if (username.length < 2) {
+        setError("用户名长度至少为 2 个字符")
+        return false
+      }
+
+      if (password !== confirmPassword) {
+        setError("两次输入的密码不一致")
+        return false
+      }
+    }
+
+    return true
+  }
+
+  // 处理表单提交
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setIsLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    setError(null)
 
-    if (activeTab === "login") {
-      if (email === "admin@syslog.dev") {
-        loginAsAdmin()
-        toast.success("欢迎回来，管理员！")
-      } else {
-        login(email.split("@")[0] || "user", email)
-        toast.success("登录成功！")
-      }
-    } else {
-      if (!username.trim()) {
-        toast.error("请输入用户名")
-        setIsLoading(false)
-        return
-      }
-      login(username, email)
-      toast.success("注册成功！欢迎加入 SysLog")
+    // 验证表单
+    if (!validateForm()) {
+      return
     }
-    setIsLoading(false)
-    router.push("/")
+
+    setIsLoading(true)
+
+    try {
+      let result: { success: boolean; error?: string }
+
+      if (activeTab === "login") {
+        result = await login(email, password)
+        if (result.success) {
+          toast.success("登录成功！")
+          router.push("/")
+        } else {
+          setError(result.error || "登录失败，请检查邮箱和密码")
+        }
+      } else {
+        result = await register(email, password, username)
+        if (result.success) {
+          toast.success("注册成功！欢迎加入 SysLog")
+          router.push("/")
+        } else {
+          setError(result.error || "注册失败，请稍后重试")
+        }
+      }
+    } catch (err) {
+      console.error("提交失败:", err)
+      setError("网络错误，请稍后重试")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // 加载中状态
+  if (authLoading) {
+    return (
+      <div className="w-full max-w-md flex items-center justify-center h-96">
+        <div className="h-8 w-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+      </div>
+    )
+  }
+
+  // 已登录状态不显示表单
+  if (isLoggedIn) {
+    return null
   }
 
   return (
@@ -66,6 +158,7 @@ function AuthFormInner() {
         </p>
       </div>
 
+      {/* 标签切换 */}
       <div className="flex rounded-xl border border-border/40 bg-card/30 p-1 mb-8">
         <button
           onClick={() => setActiveTab("login")}
@@ -89,7 +182,16 @@ function AuthFormInner() {
         </button>
       </div>
 
+      {/* 错误提示 */}
+      {error && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        {/* 注册时显示用户名输入 */}
         {activeTab === "register" && (
           <div>
             <Label htmlFor="username" className="text-sm text-foreground/80 mb-2 block">
@@ -101,11 +203,12 @@ function AuthFormInner() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="bg-card/30 border-border/40 focus:border-primary/40 h-11 font-mono rounded-lg transition-all duration-300"
-              required
+              disabled={isLoading}
             />
           </div>
         )}
 
+        {/* 邮箱输入 */}
         <div>
           <Label htmlFor="email" className="text-sm text-foreground/80 mb-2 block">
             邮箱
@@ -117,22 +220,22 @@ function AuthFormInner() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="bg-card/30 border-border/40 focus:border-primary/40 h-11 rounded-lg transition-all duration-300"
-            required
+            disabled={isLoading}
           />
-          {activeTab === "login" && (
-            <p className="text-[10px] text-muted-foreground/30 mt-1.5 font-mono">
-              {"提示：输入 admin@syslog.dev 可以管理员身份登录"}
-            </p>
-          )}
         </div>
 
+        {/* 密码输入 */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <Label htmlFor="password" className="text-sm text-foreground/80">
               密码
             </Label>
             {activeTab === "login" && (
-              <button type="button" className="text-xs text-primary/70 hover:text-primary transition-colors duration-300">
+              <button 
+                type="button" 
+                className="text-xs text-primary/70 hover:text-primary transition-colors duration-300"
+                onClick={() => toast.info("密码找回功能开发中...")}
+              >
                 忘记密码？
               </button>
             )}
@@ -142,8 +245,10 @@ function AuthFormInner() {
               id="password"
               type={showPassword ? "text" : "password"}
               placeholder="输入你的密码"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="bg-card/30 border-border/40 focus:border-primary/40 h-11 pr-10 rounded-lg transition-all duration-300"
-              required
+              disabled={isLoading}
             />
             <button
               type="button"
@@ -156,6 +261,7 @@ function AuthFormInner() {
           </div>
         </div>
 
+        {/* 注册时显示确认密码 */}
         {activeTab === "register" && (
           <div>
             <Label htmlFor="confirm-password" className="text-sm text-foreground/80 mb-2 block">
@@ -165,12 +271,15 @@ function AuthFormInner() {
               id="confirm-password"
               type="password"
               placeholder="再次输入密码"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               className="bg-card/30 border-border/40 focus:border-primary/40 h-11 rounded-lg transition-all duration-300"
-              required
+              disabled={isLoading}
             />
           </div>
         )}
 
+        {/* 提交按钮 */}
         <Button
           type="submit"
           disabled={isLoading}
@@ -194,25 +303,31 @@ function AuthFormInner() {
         </span>
       </div>
 
+      {/* 第三方登录按钮 */}
       <div className="grid grid-cols-2 gap-3">
         <Button
           variant="outline"
+          type="button"
           className="h-11 gap-2 border-border/40 hover:border-primary/30 hover:bg-primary/5 rounded-lg transition-all duration-300"
-          onClick={() => { loginAsAdmin(); toast.success("通过 GitHub 登录成功"); router.push("/") }}
+          onClick={() => toast.info("GitHub 登录功能开发中...")}
+          disabled={isLoading}
         >
           <Github className="h-4 w-4" />
           GitHub
         </Button>
         <Button
           variant="outline"
+          type="button"
           className="h-11 gap-2 border-border/40 hover:border-primary/30 hover:bg-primary/5 rounded-lg transition-all duration-300"
-          onClick={() => { login("google_user", "user@gmail.com"); toast.success("通过 Google 登录成功"); router.push("/") }}
+          onClick={() => toast.info("Google 登录功能开发中...")}
+          disabled={isLoading}
         >
           <Mail className="h-4 w-4" />
           Google
         </Button>
       </div>
 
+      {/* 底部提示 */}
       <div className="mt-10 rounded-xl border border-border/30 bg-card/20 p-4 font-mono text-xs text-muted-foreground/40">
         <span className="text-primary/60">$</span> ssh user@syslog.dev
         <br />

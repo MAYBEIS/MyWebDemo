@@ -21,7 +21,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
-import { useAuth, incrementStat } from "@/lib/auth-store"
+import { useAuth } from "@/lib/auth-store"
 import Link from "next/link"
 
 interface Question {
@@ -223,7 +223,6 @@ export function DailyQuiz() {
       const points = difficultyConfig[currentQuestion.difficulty].points + timeBonus
       setScore((s) => s + points)
       setCorrectCount((c) => c + 1)
-      incrementStat("likes")
       toast.success(`+${points} 分！（含时间奖励 +${timeBonus}）`)
     }
   }

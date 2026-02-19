@@ -9,6 +9,17 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useAuth, logout } from "@/lib/auth-store"
 import { toast } from "sonner"
 
+// 获取用户头像首字母
+function getAvatarInitials(name: string, avatar: string | null): string {
+  if (avatar) return avatar
+  return name
+    .split(/[_\s]/)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
+}
+
 const navLinks = [
   { href: "/", label: "首页" },
   { href: "/blog", label: "博客" },
@@ -104,10 +115,10 @@ export function NavHeader() {
               >
                 <Avatar className="h-7 w-7 border border-border/40">
                   <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-mono font-bold">
-                    {user.avatar}
+                    {getAvatarInitials(user.name, user.avatar)}
                   </AvatarFallback>
                 </Avatar>
-                <span className="text-sm text-foreground/80 font-medium max-w-[100px] truncate">{user.username}</span>
+                <span className="text-sm text-foreground/80 font-medium max-w-[100px] truncate">{user.name}</span>
               </button>
 
               {showUserMenu && (
@@ -117,7 +128,7 @@ export function NavHeader() {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="px-4 py-3 border-b border-border/30">
-                    <p className="text-sm font-semibold text-foreground truncate">{user.username}</p>
+                    <p className="text-sm font-semibold text-foreground truncate">{user.name}</p>
                     <p className="text-xs text-muted-foreground/50 truncate">{user.email}</p>
                   </div>
                   <div className="py-1.5">
@@ -192,10 +203,10 @@ export function NavHeader() {
             {isLoggedIn && user && (
               <div className="flex items-center gap-3 px-3 py-3 mb-2 border-b border-border/30 pb-4">
                 <Avatar className="h-8 w-8 border border-border/40">
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-mono">{user.avatar}</AvatarFallback>
+                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-mono">{getAvatarInitials(user.name, user.avatar)}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{user.username}</p>
+                  <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
                   <p className="text-xs text-muted-foreground/40 truncate">{user.email}</p>
                 </div>
               </div>
