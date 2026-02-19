@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, X, Terminal, ChevronRight, User, LogOut, Settings } from "lucide-react"
+import { Menu, X, Terminal, ChevronRight, User, LogOut, Settings, Shield } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useAuth, logout } from "@/lib/auth-store"
 import { toast } from "sonner"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 // 获取用户头像首字母
 function getAvatarInitials(name: string, avatar: string | null): string {
@@ -107,6 +108,9 @@ export function NavHeader() {
 
         {/* Desktop Auth / User */}
         <div className="hidden items-center gap-2.5 md:flex">
+          {/* 主题切换 */}
+          <ThemeToggle />
+          
           {isLoggedIn && user ? (
             <div className="relative">
               <button
@@ -132,6 +136,15 @@ export function NavHeader() {
                     <p className="text-xs text-muted-foreground/50 truncate">{user.email}</p>
                   </div>
                   <div className="py-1.5">
+                    {/* 管理员入口 */}
+                    {user.isAdmin && (
+                      <Link
+                        href="/admin"
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-primary hover:bg-primary/5 transition-all duration-200"
+                      >
+                        <Shield className="h-4 w-4" /> 管理后台
+                      </Link>
+                    )}
                     <Link
                       href="/profile"
                       className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground/70 hover:text-foreground hover:bg-secondary/30 transition-all duration-200"

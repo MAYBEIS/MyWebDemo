@@ -54,7 +54,7 @@ export async function verifyCredentials(
   email: string,
   password: string
 ): Promise<AuthUser | null> {
-  const user = await prisma.user.findUnique({
+  const user = await prisma.users.findUnique({
     where: { email },
   })
 
@@ -104,7 +104,7 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
     const { payload } = await jwtVerify(token, getJWTSecret())
 
     // 从数据库验证用户是否仍然有效
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { id: payload.userId as string },
     })
 
@@ -167,7 +167,7 @@ export async function registerUser(
   name: string
 ): Promise<AuthUser | null> {
   // 检查邮箱是否已存在
-  const existingUser = await prisma.user.findUnique({
+  const existingUser = await prisma.users.findUnique({
     where: { email },
   })
 
@@ -186,14 +186,16 @@ export async function registerUser(
     .toUpperCase()
     .slice(0, 2)
 
-  const user = await prisma.user.create({
+  const user = await prisma.users.create({
     data: {
+      id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       email,
       name,
       password: hashedPassword,
       avatar: initials,
       bio: '',
       isAdmin: false,
+      updatedAt: new Date(),
     },
   })
 
@@ -214,9 +216,9 @@ export async function updateUserProfile(
   userId: string,
   data: { name?: string; bio?: string; avatar?: string }
 ): Promise<AuthUser | null> {
-  const user = await prisma.user.update({
+  const user = await prisma.users.update({
     where: { id: userId },
-    data,
+    data: { ...data, updatedAt: new Date() },
   })
 
   return {
@@ -237,7 +239,7 @@ export async function changePassword(
   oldPassword: string,
   newPassword: string
 ): Promise<boolean> {
-  const user = await prisma.user.findUnique({
+  const user = await prisma.users.findUnique({
     where: { id: userId },
   })
 
@@ -255,9 +257,9 @@ export async function changePassword(
   const hashedPassword = await hashPassword(newPassword)
 
   // 更新密码
-  await prisma.user.update({
+  await prisma.users.update({
     where: { id: userId },
-    data: { password: hashedPassword },
+    data: { password: hashedPassword, updatedAt: new Date() },
   })
 
   return true

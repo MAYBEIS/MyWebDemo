@@ -13,7 +13,7 @@ interface GuestbookWithAuthor {
   authorId: string
   createdAt: Date
   updatedAt: Date
-  author: {
+  users: {
     name: string
     avatar: string | null
   }
@@ -58,12 +58,12 @@ export async function getGuestbookEntries(
   const { page = 1, limit = 20 } = options
 
   // 获取总数
-  const total = await prisma.guestbook.count()
+  const total = await prisma.guestbooks.count()
 
   // 获取分页数据
-  const entries = await prisma.guestbook.findMany({
+  const entries = await prisma.guestbooks.findMany({
     include: {
-      author: {
+      users: {
         select: { name: true, avatar: true }
       }
     },
@@ -77,8 +77,8 @@ export async function getGuestbookEntries(
     id: entry.id,
     message: entry.message,
     authorId: entry.authorId,
-    authorName: entry.author.name,
-    authorAvatar: entry.author.avatar,
+    authorName: entry.users.name,
+    authorAvatar: entry.users.avatar,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
   }))
@@ -97,10 +97,10 @@ export async function getGuestbookEntries(
 export async function getGuestbookEntryById(
   id: string
 ): Promise<GuestbookEntry | null> {
-  const entry = await prisma.guestbook.findUnique({
+  const entry = await prisma.guestbooks.findUnique({
     where: { id },
     include: {
-      author: {
+      users: {
         select: { name: true, avatar: true }
       }
     },
@@ -114,8 +114,8 @@ export async function getGuestbookEntryById(
     id: entry.id,
     message: entry.message,
     authorId: entry.authorId,
-    authorName: entry.author.name,
-    authorAvatar: entry.author.avatar,
+    authorName: entry.users.name,
+    authorAvatar: entry.users.avatar,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
   }
@@ -127,13 +127,17 @@ export async function getGuestbookEntryById(
 export async function createGuestbookEntry(
   input: CreateGuestbookInput
 ): Promise<GuestbookEntry> {
-  const entry = await prisma.guestbook.create({
+  const id = `guestbook_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  
+  const entry = await prisma.guestbooks.create({
     data: {
+      id,
       message: input.message,
       authorId: input.authorId,
+      updatedAt: new Date(),
     },
     include: {
-      author: {
+      users: {
         select: { name: true, avatar: true }
       }
     },
@@ -143,8 +147,8 @@ export async function createGuestbookEntry(
     id: entry.id,
     message: entry.message,
     authorId: entry.authorId,
-    authorName: entry.author.name,
-    authorAvatar: entry.author.avatar,
+    authorName: entry.users.name,
+    authorAvatar: entry.users.avatar,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
   }
@@ -159,7 +163,7 @@ export async function updateGuestbookEntry(
   input: UpdateGuestbookInput
 ): Promise<GuestbookEntry | null> {
   // 验证留言是否属于该用户
-  const existingEntry = await prisma.guestbook.findUnique({
+  const existingEntry = await prisma.guestbooks.findUnique({
     where: { id },
   })
 
@@ -167,14 +171,14 @@ export async function updateGuestbookEntry(
     return null
   }
 
-  const entry = await prisma.guestbook.update({
+  const entry = await prisma.guestbooks.update({
     where: { id },
     data: {
       message: input.message,
       updatedAt: new Date(),
     },
     include: {
-      author: {
+      users: {
         select: { name: true, avatar: true }
       }
     },
@@ -184,8 +188,8 @@ export async function updateGuestbookEntry(
     id: entry.id,
     message: entry.message,
     authorId: entry.authorId,
-    authorName: entry.author.name,
-    authorAvatar: entry.author.avatar,
+    authorName: entry.users.name,
+    authorAvatar: entry.users.avatar,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
   }
@@ -200,7 +204,7 @@ export async function deleteGuestbookEntry(
   isAdmin: boolean = false
 ): Promise<boolean> {
   // 验证留言是否属于该用户或用户是管理员
-  const existingEntry = await prisma.guestbook.findUnique({
+  const existingEntry = await prisma.guestbooks.findUnique({
     where: { id },
   })
 
@@ -213,7 +217,7 @@ export async function deleteGuestbookEntry(
   }
 
   try {
-    await prisma.guestbook.delete({
+    await prisma.guestbooks.delete({
       where: { id },
     })
     return true

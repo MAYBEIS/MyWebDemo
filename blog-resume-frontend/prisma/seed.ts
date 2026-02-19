@@ -12,47 +12,52 @@ async function main() {
   console.log('🌱 开始播种数据库...')
 
   // 清理现有数据
-  await prisma.comment.deleteMany()
-  await prisma.postTag.deleteMany()
-  await prisma.post.deleteMany()
-  await prisma.guestbook.deleteMany()
-  await prisma.session.deleteMany()
-  await prisma.user.deleteMany()
+  await prisma.comments.deleteMany()
+  await prisma.post_tags.deleteMany()
+  await prisma.posts.deleteMany()
+  await prisma.guestbooks.deleteMany()
+  await prisma.sessions.deleteMany()
+  await prisma.users.deleteMany()
 
   console.log('✅ 清理完成')
 
   // 创建管理员用户
   const hashedAdminPassword = await bcrypt.hash('admin123', 12)
-  const admin = await prisma.user.create({
+  const admin = await prisma.users.create({
     data: {
+      id: `user_${Date.now()}_admin`,
       email: 'admin@example.com',
       name: '管理员',
       password: hashedAdminPassword,
       isAdmin: true,
       avatar: 'GL',
       bio: '系统程序员 & 技术作者 | 探索内核、编译器与高性能计算的深度奥秘',
+      updatedAt: new Date(),
     },
   })
   console.log('✅ 创建管理员用户:', admin.email)
 
   // 创建普通用户
   const hashedUserPassword = await bcrypt.hash('user123', 12)
-  const user = await prisma.user.create({
+  const user = await prisma.users.create({
     data: {
+      id: `user_${Date.now()}_user`,
       email: 'user@example.com',
       name: '普通用户',
       password: hashedUserPassword,
       isAdmin: false,
       avatar: 'PT',
       bio: '热爱编程的开发者',
+      updatedAt: new Date(),
     },
   })
   console.log('✅ 创建普通用户:', user.email)
 
   // 创建示例文章
   const posts = await Promise.all([
-    prisma.post.create({
+    prisma.posts.create({
       data: {
+        id: `post_${Date.now()}_1`,
         slug: 'nextjs-app-router-introduction',
         title: 'Next.js App Router 完全指南',
         content: `# Next.js App Router 简介
@@ -92,17 +97,19 @@ App Router 代表了 React 应用的未来方向，值得深入学习和实践�
         coverImage: '/images/blog/nextjs.jpg',
         published: true,
         authorId: admin.id,
-        tags: {
+        updatedAt: new Date(),
+        post_tags: {
           create: [
-            { tag: 'Next.js' },
-            { tag: 'React' },
-            { tag: '前端' },
+            { id: `tag_${Date.now()}_1`, tag: 'Next.js' },
+            { id: `tag_${Date.now()}_2`, tag: 'React' },
+            { id: `tag_${Date.now()}_3`, tag: '前端' },
           ],
         },
       },
     }),
-    prisma.post.create({
+    prisma.posts.create({
       data: {
+        id: `post_${Date.now()}_2`,
         slug: 'typescript-best-practices',
         title: 'TypeScript 最佳实践',
         content: `# TypeScript 最佳实践
@@ -142,17 +149,19 @@ const config = {
         coverImage: '/images/blog/typescript.jpg',
         published: true,
         authorId: admin.id,
-        tags: {
+        updatedAt: new Date(),
+        post_tags: {
           create: [
-            { tag: 'TypeScript' },
-            { tag: 'JavaScript' },
-            { tag: '类型系统' },
+            { id: `tag_${Date.now()}_4`, tag: 'TypeScript' },
+            { id: `tag_${Date.now()}_5`, tag: 'JavaScript' },
+            { id: `tag_${Date.now()}_6`, tag: '类型系统' },
           ],
         },
       },
     }),
-    prisma.post.create({
+    prisma.posts.create({
       data: {
+        id: `post_${Date.now()}_3`,
         slug: 'react-hooks-deep-dive',
         title: 'React Hooks 深度解析',
         content: `# React Hooks 深度解析
@@ -188,11 +197,12 @@ Hooks 是 React 开发的核心技能。`,
         coverImage: '/images/blog/react.jpg',
         published: true,
         authorId: admin.id,
-        tags: {
+        updatedAt: new Date(),
+        post_tags: {
           create: [
-            { tag: 'React' },
-            { tag: 'Hooks' },
-            { tag: '状态管理' },
+            { id: `tag_${Date.now()}_7`, tag: 'React' },
+            { id: `tag_${Date.now()}_8`, tag: 'Hooks' },
+            { id: `tag_${Date.now()}_9`, tag: '状态管理' },
           ],
         },
       },
@@ -202,15 +212,19 @@ Hooks 是 React 开发的核心技能。`,
   console.log('✅ 创建示例文章:', posts.length, '篇')
 
   // 创建示例留言
-  await prisma.guestbook.createMany({
+  await prisma.guestbooks.createMany({
     data: [
       {
+        id: `guestbook_${Date.now()}_1`,
         message: '很棒的博客！内容很有深度，学到了很多。',
         authorId: user.id,
+        updatedAt: new Date(),
       },
       {
+        id: `guestbook_${Date.now()}_2`,
         message: '期待更多关于系统编程的文章！',
         authorId: user.id,
+        updatedAt: new Date(),
       },
     ],
   })

@@ -83,7 +83,7 @@ export async function getPosts(options: GetPostsOptions = {}): Promise<{
 
   // 按标签筛选
   if (tag) {
-    where.tags = {
+    where.post_tags = {
       some: { tag }
     }
   }
@@ -98,16 +98,16 @@ export async function getPosts(options: GetPostsOptions = {}): Promise<{
   }
 
   // 获取总数
-  const total = await prisma.post.count({ where })
+  const total = await prisma.posts.count({ where })
 
   // 获取分页数据
-  const posts = await prisma.post.findMany({
+  const posts = await prisma.posts.findMany({
     where,
     include: {
-      author: {
+      users: {
         select: { name: true }
       },
-      tags: true,
+      post_tags: true,
     },
     orderBy: { createdAt: 'desc' },
     skip: (page - 1) * limit,
@@ -122,10 +122,10 @@ export async function getPosts(options: GetPostsOptions = {}): Promise<{
     content: post.content,
     excerpt: post.excerpt,
     category: post.category,
-    tags: post.tags.map((t) => t.tag),
+    tags: post.post_tags.map((t) => t.tag),
     coverImage: post.coverImage,
     authorId: post.authorId,
-    authorName: post.author.name,
+    authorName: post.users.name,
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,
     published: post.published,
@@ -145,13 +145,13 @@ export async function getPosts(options: GetPostsOptions = {}): Promise<{
  * 根据 slug 获取单篇文章
  */
 export async function getPostBySlug(slug: string): Promise<Post | null> {
-  const post = await prisma.post.findUnique({
+  const post = await prisma.posts.findUnique({
     where: { slug },
     include: {
-      author: {
+      users: {
         select: { name: true }
       },
-      tags: true,
+      post_tags: true,
     },
   })
 
@@ -166,10 +166,10 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
     content: post.content,
     excerpt: post.excerpt,
     category: post.category,
-    tags: post.tags.map((t) => t.tag),
+    tags: post.post_tags.map((t) => t.tag),
     coverImage: post.coverImage,
     authorId: post.authorId,
-    authorName: post.author.name,
+    authorName: post.users.name,
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,
     published: post.published,
@@ -184,9 +184,11 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
 export async function createPost(input: CreatePostInput): Promise<Post> {
   const slug = generateSlug(input.title)
   const excerpt = input.excerpt || generateExcerpt(input.content)
+  const id = `post_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-  const post = await prisma.post.create({
+  const post = await prisma.posts.create({
     data: {
+      id,
       slug,
       title: input.title,
       content: input.content,
@@ -195,13 +197,17 @@ export async function createPost(input: CreatePostInput): Promise<Post> {
       coverImage: input.coverImage,
       authorId: input.authorId,
       published: true,
-      tags: input.tags ? {
-        create: input.tags.map((tag) => ({ tag }))
+      updatedAt: new Date(),
+      post_tags: input.tags ? {
+        create: input.tags.map((tag) => ({
+          id: `tag_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          tag
+        }))
       } : undefined,
     },
     include: {
-      author: { select: { name: true } },
-      tags: true,
+      users: { select: { name: true } },
+      post_tags: true,
     },
   })
 
@@ -212,10 +218,10 @@ export async function createPost(input: CreatePostInput): Promise<Post> {
     content: post.content,
     excerpt: post.excerpt,
     category: post.category,
-    tags: post.tags.map((t) => t.tag),
+    tags: post.post_tags.map((t) => t.tag),
     coverImage: post.coverImage,
     authorId: post.authorId,
-    authorName: post.author.name,
+    authorName: post.users.name,
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,
     published: post.published,
@@ -232,7 +238,7 @@ export async function updatePost(
   input: UpdatePostInput
 ): Promise<Post | null> {
   // 先查找文章
-  const existingPost = await prisma.post.findUnique({
+  const existingPost = await prisma.posts.findUnique({
     where: { slug },
   })
 
@@ -243,24 +249,39 @@ export async function updatePost(
   // 如果标题改变，更新 slug
   const newSlug = input.title ? generateSlug(input.title) : slug
 
+  // 准备更新数据
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updateData: any = {
+    slug: newSlug,
+    updatedAt: new Date(),
+  }
+
+  // 只更新提供的字段
+  if (input.title !== undefined) updateData.title = input.title
+  if (input.content !== undefined) updateData.content = input.content
+  if (input.excerpt !== undefined) updateData.excerpt = input.excerpt
+  if (input.category !== undefined) updateData.category = input.category
+  if (input.coverImage !== undefined) updateData.coverImage = input.coverImage
+  if (input.published !== undefined) updateData.published = input.published
+
+  // 更新标签
+  if (input.tags !== undefined) {
+    updateData.post_tags = {
+      deleteMany: {},
+      create: input.tags.map((tag) => ({
+        id: `tag_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        tag
+      })),
+    }
+  }
+
   // 更新文章
-  const post = await prisma.post.update({
+  const post = await prisma.posts.update({
     where: { slug },
-    data: {
-      ...input,
-      slug: newSlug,
-      updatedAt: new Date(),
-      // 更新标签
-      ...(input.tags && {
-        tags: {
-          deleteMany: {},
-          create: input.tags.map((tag) => ({ tag })),
-        },
-      }),
-    },
+    data: updateData,
     include: {
-      author: { select: { name: true } },
-      tags: true,
+      users: { select: { name: true } },
+      post_tags: true,
     },
   })
 
@@ -271,10 +292,10 @@ export async function updatePost(
     content: post.content,
     excerpt: post.excerpt,
     category: post.category,
-    tags: post.tags.map((t) => t.tag),
+    tags: post.post_tags.map((t: { tag: string }) => t.tag),
     coverImage: post.coverImage,
     authorId: post.authorId,
-    authorName: post.author.name,
+    authorName: post.users?.name,
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,
     published: post.published,
@@ -288,7 +309,7 @@ export async function updatePost(
  */
 export async function deletePost(slug: string): Promise<boolean> {
   try {
-    await prisma.post.delete({
+    await prisma.posts.delete({
       where: { slug },
     })
     return true
@@ -301,7 +322,7 @@ export async function deletePost(slug: string): Promise<boolean> {
  * 增加文章浏览量
  */
 export async function incrementViews(slug: string): Promise<void> {
-  await prisma.post.update({
+  await prisma.posts.update({
     where: { slug },
     data: { views: { increment: 1 } },
   })
@@ -311,7 +332,7 @@ export async function incrementViews(slug: string): Promise<void> {
  * 增加文章点赞数
  */
 export async function incrementLikes(slug: string): Promise<void> {
-  await prisma.post.update({
+  await prisma.posts.update({
     where: { slug },
     data: { likes: { increment: 1 } },
   })
@@ -321,7 +342,7 @@ export async function incrementLikes(slug: string): Promise<void> {
  * 获取所有分类
  */
 export async function getCategories(): Promise<string[]> {
-  const categories = await prisma.post.findMany({
+  const categories = await prisma.posts.findMany({
     where: { published: true },
     select: { category: true },
     distinct: ['category'],
@@ -335,7 +356,7 @@ export async function getCategories(): Promise<string[]> {
  * 获取所有标签
  */
 export async function getTags(): Promise<string[]> {
-  const tags = await prisma.postTag.findMany({
+  const tags = await prisma.post_tags.findMany({
     distinct: ['tag'],
     select: { tag: true },
   })
