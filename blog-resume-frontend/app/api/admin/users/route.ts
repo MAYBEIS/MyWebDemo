@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth-service'
 import prisma from '@/lib/prisma'
 
-// 管理员邮箱列表
-const ADMIN_EMAILS = ["admin@syslog.dev"]
-
 /**
  * GET /api/admin/users
  * 获取所有用户列表（管理员专用）
@@ -13,8 +10,8 @@ export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser(request)
 
-    // 检查是否是管理员
-    if (!user || (!user.isAdmin && !ADMIN_EMAILS.includes(user.email))) {
+    // 检查是否是管理员（通过数据库中的 isAdmin 字段判断）
+    if (!user || !user.isAdmin) {
       return NextResponse.json(
         { success: false, error: '无权限访问' },
         { status: 403 }

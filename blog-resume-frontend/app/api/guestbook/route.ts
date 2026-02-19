@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import {
-  getGuestbookEntries,
-  createGuestbookEntry,
-} from '@/lib/guestbook-service'
+import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-service'
 
 /**
@@ -15,11 +12,40 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
 
-    const result = await getGuestbookEntries({ page, limit })
+    const total = await prisma.guestbooks.count()
+
+    const entries = await prisma.guestbooks.findMany({
+      include: {
+        users: {
+          select: { id: true, name: true, avatar: true, isAdmin: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    })
+
+    // 转换为前端期望的格式
+    const formattedEntries = entries.map((entry) => ({
+      id: entry.id,
+      message: entry.message,
+      createdAt: entry.createdAt,
+      author: {
+        id: entry.users.id,
+        name: entry.users.name,
+        avatar: entry.users.avatar || '',
+        isAdmin: entry.users.isAdmin,
+      },
+    }))
 
     return NextResponse.json({
       success: true,
-      data: result,
+      data: {
+        entries: formattedEntries,
+        total,
+        page,
+        limit,
+      },
     })
   } catch (error) {
     console.error('获取留言列表失败:', error)
@@ -64,15 +90,39 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const newEntry = await createGuestbookEntry({
-      message: message.trim(),
-      authorId: user.id,
+    const id = `guestbook_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+    const newEntry = await prisma.guestbooks.create({
+      data: {
+        id,
+        message: message.trim(),
+        authorId: user.id,
+        updatedAt: new Date(),
+      },
+      include: {
+        users: {
+          select: { id: true, name: true, avatar: true, isAdmin: true }
+        }
+      },
     })
+
+    // 转换为前端期望的格式
+    const formattedEntry = {
+      id: newEntry.id,
+      message: newEntry.message,
+      createdAt: newEntry.createdAt,
+      author: {
+        id: newEntry.users.id,
+        name: newEntry.users.name,
+        avatar: newEntry.users.avatar || '',
+        isAdmin: newEntry.users.isAdmin,
+      },
+    }
 
     return NextResponse.json(
       {
         success: true,
-        data: newEntry,
+        data: formattedEntry,
       },
       { status: 201 }
     )

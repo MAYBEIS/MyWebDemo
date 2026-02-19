@@ -2,6 +2,7 @@ import { NavHeader } from "@/components/nav-header"
 import { SiteFooter } from "@/components/site-footer"
 import { ArticleContent } from "@/components/article-content"
 import { ArticleComments } from "@/components/article-comments"
+import prisma from "@/lib/prisma"
 
 export const metadata = {
   title: "文章详情 | SysLog",
@@ -11,13 +12,19 @@ export const metadata = {
 export default async function ArticlePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
 
+  // 获取文章信息以获取文章 ID
+  const post = await prisma.posts.findUnique({
+    where: { slug },
+    select: { id: true }
+  })
+
   return (
     <main className="min-h-screen bg-background noise-bg">
       <NavHeader />
       <div className="pt-28 pb-20 px-6">
         <div className="mx-auto max-w-3xl">
           <ArticleContent slug={slug} />
-          <ArticleComments />
+          {post && <ArticleComments postId={post.id} />}
         </div>
       </div>
       <SiteFooter />

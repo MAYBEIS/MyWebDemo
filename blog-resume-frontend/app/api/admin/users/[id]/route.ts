@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth-service'
 import prisma from '@/lib/prisma'
 
-// 管理员邮箱列表
-const ADMIN_EMAILS = ["admin@syslog.dev"]
-
 /**
  * PATCH /api/admin/users/[id]
  * 更新用户信息（管理员专用）
@@ -17,8 +14,8 @@ export async function PATCH(
     const user = await getCurrentUser(request)
     const { id } = await params
 
-    // 检查是否是管理员
-    if (!user || (!user.isAdmin && !ADMIN_EMAILS.includes(user.email))) {
+    // 检查是否是管理员（通过数据库中的 isAdmin 字段判断）
+    if (!user || !user.isAdmin) {
       return NextResponse.json(
         { success: false, error: '无权限访问' },
         { status: 403 }
@@ -65,8 +62,8 @@ export async function DELETE(
     const user = await getCurrentUser(request)
     const { id } = await params
 
-    // 检查是否是管理员
-    if (!user || (!user.isAdmin && !ADMIN_EMAILS.includes(user.email))) {
+    // 检查是否是管理员（通过数据库中的 isAdmin 字段判断）
+    if (!user || !user.isAdmin) {
       return NextResponse.json(
         { success: false, error: '无权限访问' },
         { status: 403 }

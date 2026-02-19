@@ -4,12 +4,12 @@ import { verifyToken } from "@/lib/auth-service"
 import { NavHeader } from "@/components/nav-header"
 import { SiteFooter } from "@/components/site-footer"
 import { AdminSidebar } from "@/components/admin-sidebar"
-import { PostsManager } from "@/components/posts-manager"
+import { CommentsManager } from "@/components/comments-manager"
 import prisma from "@/lib/prisma"
 
 export const metadata = {
-  title: "文章管理 | SysLog 管理后台",
-  description: "管理博客文章",
+  title: "评论管理 | SysLog 管理后台",
+  description: "管理文章评论",
 }
 
 async function getCurrentUser() {
@@ -23,12 +23,12 @@ async function getCurrentUser() {
   return verifyToken(token)
 }
 
-export default async function AdminPostsPage() {
+export default async function AdminCommentsPage() {
   const user = await getCurrentUser()
   
   // 检查是否登录
   if (!user) {
-    redirect("/login?redirect=/admin/posts")
+    redirect("/login?redirect=/admin/comments")
   }
   
   // 检查是否是管理员（通过数据库中的 isAdmin 字段判断）
@@ -36,15 +36,18 @@ export default async function AdminPostsPage() {
     redirect("/")
   }
   
-  // 获取所有文章
-  const posts = await prisma.posts.findMany({
+  // 获取所有评论
+  const comments = await prisma.comments.findMany({
     orderBy: { createdAt: "desc" },
     include: {
       users: {
-        select: { id: true, name: true, email: true }
+        select: { id: true, name: true, avatar: true, isAdmin: true }
       },
-      post_tags: {
-        select: { tag: true }
+      posts: {
+        select: { id: true, title: true, slug: true }
+      },
+      comments: {
+        select: { id: true }
       }
     }
   })
@@ -55,7 +58,7 @@ export default async function AdminPostsPage() {
       <div className="flex max-w-7xl mx-auto px-6 pt-20 pb-16">
         <AdminSidebar />
         <div className="flex-1 ml-8">
-          <PostsManager initialPosts={JSON.parse(JSON.stringify(posts))} />
+          <CommentsManager initialComments={JSON.parse(JSON.stringify(comments))} />
         </div>
       </div>
       <SiteFooter />

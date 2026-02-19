@@ -10,9 +10,6 @@ export const metadata = {
   description: "系统管理后台",
 }
 
-// 管理员邮箱列表
-const ADMIN_EMAILS = ["admin@syslog.dev"]
-
 async function getCurrentUser() {
   const cookieStore = await cookies()
   const token = cookieStore.get("auth_token")?.value
@@ -32,8 +29,8 @@ export default async function AdminPage() {
     redirect("/login?redirect=/admin")
   }
   
-  // 检查是否是管理员
-  if (!user.isAdmin && !ADMIN_EMAILS.includes(user.email)) {
+  // 检查是否是管理员（通过数据库中的 isAdmin 字段判断）
+  if (!user.isAdmin) {
     redirect("/")
   }
   

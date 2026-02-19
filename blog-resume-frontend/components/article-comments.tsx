@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { MessageSquare, ThumbsUp, Reply, ChevronDown, ChevronUp, Send } from "lucide-react"
+import { useState, useEffect } from "react"
+import { MessageSquare, ThumbsUp, Reply, ChevronDown, ChevronUp, Send, Trash2 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -21,55 +21,40 @@ function getAvatarInitials(name: string, avatar: string | null): string {
     .slice(0, 2)
 }
 
-interface Comment {
-  id: number
-  author: string
+// 格式化时间
+function formatTime(date: Date): string {
+  const now = new Date()
+  const diff = now.getTime() - new Date(date).getTime()
+  const seconds = Math.floor(diff / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+
+  if (seconds < 60) return "刚刚"
+  if (minutes < 60) return `${minutes} 分钟前`
+  if (hours < 24) return `${hours} 小时前`
+  if (days < 7) return `${days} 天前`
+  return new Date(date).toLocaleDateString("zh-CN")
+}
+
+interface Author {
+  id: string
+  name: string
   avatar: string
-  date: string
+  isAdmin: boolean
+}
+
+interface Comment {
+  id: string
   content: string
-  likes: number
+  createdAt: Date
+  author: Author
   replies: Comment[]
 }
 
-const initialComments: Comment[] = [
-  {
-    id: 1,
-    author: "kernel_hacker",
-    avatar: "KH",
-    date: "2 天前",
-    content: "写得太好了！关于 buddy allocator 的解释是我见过最清晰的。希望能看到关于 SLUB 分配器的后续文章。",
-    likes: 12,
-    replies: [
-      {
-        id: 11,
-        author: "SysLog",
-        avatar: "SL",
-        date: "1 天前",
-        content: "感谢你的反馈！SLUB 分配器的文章已经在规划中了，敬请期待。",
-        likes: 5,
-        replies: [],
-      },
-    ],
-  },
-  {
-    id: 2,
-    author: "rust_evangelist",
-    avatar: "RE",
-    date: "1 天前",
-    content: "有趣的文章。你对 Rust 的所有权模型如何帮助在内核层面防止常见内存管理 bug 有什么看法？",
-    likes: 8,
-    replies: [],
-  },
-  {
-    id: 3,
-    author: "network_ninja",
-    avatar: "NN",
-    date: "5 小时前",
-    content: "关于 mmap() 的部分可以再详细讲讲 file-backed 与 anonymous mappings 的区别。总体来说是一篇很扎实的深入分析！",
-    likes: 4,
-    replies: [],
-  },
-]
+interface ArticleCommentsProps {
+  postId: string
+}
 
 function CommentItem({
   comment,
@@ -77,12 +62,16 @@ function CommentItem({
   likedSet,
   onLike,
   onReply,
+  onDelete,
+  currentUserId,
 }: {
   comment: Comment
   depth: number
-  likedSet: Set<number>
-  onLike: (id: number) => void
-  onReply: (parentId: number, content: string) => void
+  likedSet: Set<string>
+  onLike: (id: string) => void
+  onReply: (parentId: string, content: string) => void
+  onDelete: (id: string) => void
+  currentUserId?: string
 }) {
   const [showReplyInput, setShowReplyInput] = useState(false)
   const [replyText, setReplyText] = useState("")
@@ -96,7 +85,8 @@ function CommentItem({
     setShowReplyInput(false)
   }
 
-  const isAuthor = comment.author === "SysLog"
+  const isAuthor = comment.author.isAdmin
+  const canDelete = currentUserId && (currentUserId === comment.author.id || comment.author.isAdmin)
 
   return (
     <div className={`${depth > 0 ? "ml-8 pl-4 border-l border-border/20" : ""}`}>
@@ -104,19 +94,19 @@ function CommentItem({
         <div className="flex items-center gap-3 mb-3">
           <Avatar className="h-8 w-8 border border-border/40">
             <AvatarFallback className={`text-xs font-mono ${isAuthor ? "bg-primary/15 text-primary" : "bg-primary/8 text-primary/80"}`}>
-              {comment.avatar}
+              {comment.author.avatar}
             </AvatarFallback>
           </Avatar>
           <div className="flex items-center gap-2">
             <span className={`text-sm font-medium font-mono ${isAuthor ? "text-primary" : "text-foreground/90"}`}>
-              {comment.author}
+              {comment.author.name}
             </span>
             {isAuthor && (
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/15">
                 作者
               </span>
             )}
-            <span className="text-xs text-muted-foreground/40">{comment.date}</span>
+            <span className="text-xs text-muted-foreground/40">{formatTime(comment.createdAt)}</span>
           </div>
         </div>
         <p className="text-sm text-foreground/70 leading-relaxed mb-4 pl-11">
@@ -130,7 +120,7 @@ function CommentItem({
             }`}
           >
             <ThumbsUp className={`h-3.5 w-3.5 ${likedSet.has(comment.id) ? "fill-current" : ""}`} />
-            {comment.likes}
+            点赞
           </button>
           <button
             onClick={() => {
@@ -145,6 +135,15 @@ function CommentItem({
             <Reply className="h-3.5 w-3.5" />
             回复
           </button>
+          {canDelete && (
+            <button
+              onClick={() => onDelete(comment.id)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground/20 hover:text-destructive transition-colors duration-300"
+            >
+              <Trash2 className="h-3 w-3" />
+              删除
+            </button>
+          )}
           {comment.replies.length > 0 && (
             <button
               onClick={() => setShowReplies(!showReplies)}
@@ -186,6 +185,8 @@ function CommentItem({
               likedSet={likedSet}
               onLike={onLike}
               onReply={onReply}
+              onDelete={onDelete}
+              currentUserId={currentUserId}
             />
           ))}
         </div>
@@ -194,13 +195,35 @@ function CommentItem({
   )
 }
 
-export function ArticleComments() {
-  const [comments, setComments] = useState(initialComments)
+export function ArticleComments({ postId }: ArticleCommentsProps) {
+  const [comments, setComments] = useState<Comment[]>([])
+  const [loading, setLoading] = useState(true)
   const [newComment, setNewComment] = useState("")
-  const [likedComments, setLikedComments] = useState<Set<number>>(new Set())
+  const [likedComments, setLikedComments] = useState<Set<string>>(new Set())
   const { user, isLoggedIn } = useAuth()
 
-  const handleSubmitComment = () => {
+  // 加载评论
+  useEffect(() => {
+    loadComments()
+  }, [postId])
+
+  const loadComments = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/comments?postId=${postId}`)
+      const result = await response.json()
+      if (result.success) {
+        setComments(result.data)
+      }
+    } catch (error) {
+      console.error("加载评论失败:", error)
+      toast.error("加载评论失败")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSubmitComment = async () => {
     if (!isLoggedIn) {
       toast.error("请先登录后再发表评论")
       return
@@ -209,57 +232,86 @@ export function ArticleComments() {
       toast.error("请输入评论内容")
       return
     }
-    const comment: Comment = {
-      id: Date.now(),
-      author: user!.name,
-      avatar: getAvatarInitials(user!.name, user!.avatar),
-      date: "刚刚",
-      content: newComment,
-      likes: 0,
-      replies: [],
+
+    try {
+      const response = await fetch("/api/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          postId,
+          content: newComment,
+        }),
+      })
+      const result = await response.json()
+      if (result.success) {
+        setNewComment("")
+        toast.success("评论发表成功！")
+        loadComments()
+      } else {
+        toast.error(result.error || "发表评论失败")
+      }
+    } catch (error) {
+      console.error("发表评论失败:", error)
+      toast.error("发表评论失败")
     }
-    setComments([...comments, comment])
-    setNewComment("")
-    toast.success("评论发表成功！")
   }
 
-  const handleLike = (id: number) => {
+  const handleLike = (id: string) => {
     if (likedComments.has(id)) {
       setLikedComments((prev) => {
         const next = new Set(prev)
         next.delete(id)
         return next
       })
-      const updateLikes = (items: Comment[]): Comment[] =>
-        items.map((c) => c.id === id ? { ...c, likes: c.likes - 1, replies: updateLikes(c.replies) } : { ...c, replies: updateLikes(c.replies) })
-      setComments(updateLikes(comments))
     } else {
       setLikedComments(new Set([...likedComments, id]))
-      const updateLikes = (items: Comment[]): Comment[] =>
-        items.map((c) => c.id === id ? { ...c, likes: c.likes + 1, replies: updateLikes(c.replies) } : { ...c, replies: updateLikes(c.replies) })
-      setComments(updateLikes(comments))
     }
   }
 
-  const handleReply = (parentId: number, content: string) => {
+  const handleReply = async (parentId: string, content: string) => {
     if (!user) return
-    const reply: Comment = {
-      id: Date.now(),
-      author: user.name,
-      avatar: getAvatarInitials(user.name, user.avatar),
-      date: "刚刚",
-      content,
-      likes: 0,
-      replies: [],
+
+    try {
+      const response = await fetch("/api/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          postId,
+          content,
+          parentId,
+        }),
+      })
+      const result = await response.json()
+      if (result.success) {
+        toast.success("回复成功！")
+        loadComments()
+      } else {
+        toast.error(result.error || "回复失败")
+      }
+    } catch (error) {
+      console.error("回复失败:", error)
+      toast.error("回复失败")
     }
-    const addReply = (items: Comment[]): Comment[] =>
-      items.map((c) =>
-        c.id === parentId
-          ? { ...c, replies: [...c.replies, reply] }
-          : { ...c, replies: addReply(c.replies) }
-      )
-    setComments(addReply(comments))
-    toast.success("回复成功！")
+  }
+
+  const handleDelete = async (commentId: string) => {
+    if (!confirm("确定要删除这条评论吗？")) return
+
+    try {
+      const response = await fetch(`/api/comments?id=${commentId}`, {
+        method: "DELETE",
+      })
+      const result = await response.json()
+      if (result.success) {
+        toast.success("评论已删除")
+        loadComments()
+      } else {
+        toast.error(result.error || "删除评论失败")
+      }
+    } catch (error) {
+      console.error("删除评论失败:", error)
+      toast.error("删除评论失败")
+    }
   }
 
   const totalCount = (items: Comment[]): number =>
@@ -321,18 +373,30 @@ export function ArticleComments() {
       </div>
 
       {/* Comments list */}
-      <div className="flex flex-col gap-4">
-        {comments.map((comment) => (
-          <CommentItem
-            key={comment.id}
-            comment={comment}
-            depth={0}
-            likedSet={likedComments}
-            onLike={handleLike}
-            onReply={handleReply}
-          />
-        ))}
-      </div>
+      {loading ? (
+        <div className="text-center py-10">
+          <p className="text-sm text-muted-foreground/40">加载中...</p>
+        </div>
+      ) : comments.length === 0 ? (
+        <div className="text-center py-10">
+          <p className="text-sm text-muted-foreground/40">暂无评论，快来发表第一条评论吧！</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {comments.map((comment) => (
+            <CommentItem
+              key={comment.id}
+              comment={comment}
+              depth={0}
+              likedSet={likedComments}
+              onLike={handleLike}
+              onReply={handleReply}
+              onDelete={handleDelete}
+              currentUserId={user?.id}
+            />
+          ))}
+        </div>
+      )}
     </section>
   )
 }

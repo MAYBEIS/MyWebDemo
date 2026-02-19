@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Send, Heart, Trash2, LogIn } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -20,70 +20,65 @@ function getAvatarInitials(name: string, avatar: string | null): string {
     .slice(0, 2)
 }
 
-const initialMessages = [
-  {
-    id: 1,
-    author: "陈思远",
-    avatar: "CS",
-    message: "你关于 Linux 内存管理的文章对我的毕业论文研究非常有帮助。感谢你如此清晰的讲解！",
-    date: "2026 年 2 月 15 日",
-    likes: 23,
-    isAdmin: false,
-  },
-  {
-    id: 2,
-    author: "Marcus Weber",
-    avatar: "MW",
-    message: "刚刚通过 Hacker News 发现了这个博客。你的技术写作质量非常出色。已订阅，期待更多内核深度分析。",
-    date: "2026 年 2 月 12 日",
-    likes: 18,
-    isAdmin: false,
-  },
-  {
-    id: 3,
-    author: "SysLog",
-    avatar: "SL",
-    message: "欢迎来到留言板！随时留下你的想法、提问或分享你在系统编程方面的经验。",
-    date: "2026 年 2 月 1 日",
-    likes: 45,
-    isAdmin: true,
-  },
-  {
-    id: 4,
-    author: "田中优希",
-    avatar: "TZ",
-    message: "RISC-V 模拟器项目太棒了。我一直在学习计算机体系结构，你的代码文档写得非常好。准备提交我的第一个 PR！",
-    date: "2026 年 1 月 28 日",
-    likes: 15,
-    isAdmin: false,
-  },
-  {
-    id: 5,
-    author: "李明轩",
-    avatar: "LM",
-    message: "希望能看到一篇关于 eBPF 程序验证器的文章。eBPF 可观测性那篇很棒，但我对验证器内部实现更好奇。",
-    date: "2026 年 1 月 20 日",
-    likes: 31,
-    isAdmin: false,
-  },
-  {
-    id: 6,
-    author: "Priya Patel",
-    avatar: "PP",
-    message: "你的异步运行时文章比任何我读过的文档都更好地帮我理解了 Rust futures。请继续保持！",
-    date: "2026 年 1 月 15 日",
-    likes: 27,
-    isAdmin: false,
-  },
-]
+// 格式化时间
+function formatTime(date: Date): string {
+  const now = new Date()
+  const diff = now.getTime() - new Date(date).getTime()
+  const seconds = Math.floor(diff / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+
+  if (seconds < 60) return "刚刚"
+  if (minutes < 60) return `${minutes} 分钟前`
+  if (hours < 24) return `${hours} 小时前`
+  if (days < 7) return `${days} 天前`
+  return new Date(date).toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" })
+}
+
+interface Author {
+  id: string
+  name: string
+  avatar: string
+  isAdmin: boolean
+}
+
+interface GuestbookEntry {
+  id: string
+  message: string
+  createdAt: Date
+  author: Author
+}
 
 export function Guestbook() {
-  const [messages, setMessages] = useState(initialMessages)
+  const [messages, setMessages] = useState<GuestbookEntry[]>([])
+  const [loading, setLoading] = useState(true)
   const [newMessage, setNewMessage] = useState("")
-  const [likedMessages, setLikedMessages] = useState<Set<number>>(new Set())
+  const [likedMessages, setLikedMessages] = useState<Set<string>>(new Set())
   const { user, isLoggedIn } = useAuth()
 
-  const handleSubmit = () => {
+  // 加载留言
+  useEffect(() => {
+    loadMessages()
+  }, [])
+
+  const loadMessages = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch("/api/guestbook")
+      const result = await response.json()
+      if (result.success) {
+        setMessages(result.data.entries)
+      }
+    } catch (error) {
+      console.error("加载留言失败:", error)
+      toast.error("加载留言失败")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSubmit = async () => {
     if (!isLoggedIn) {
       toast.error("请先登录后再留言")
       return
@@ -93,38 +88,58 @@ export function Guestbook() {
       return
     }
 
-    const message = {
-      id: Date.now(),
-      author: user!.name,
-      avatar: getAvatarInitials(user!.name, user!.avatar),
-      message: newMessage,
-      date: new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" }),
-      likes: 0,
-      isAdmin: user!.isAdmin,
+    try {
+      const response = await fetch("/api/guestbook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: newMessage,
+        }),
+      })
+      const result = await response.json()
+      if (result.success) {
+        setNewMessage("")
+        toast.success("留言成功！")
+        loadMessages()
+      } else {
+        toast.error(result.error || "留言失败")
+      }
+    } catch (error) {
+      console.error("留言失败:", error)
+      toast.error("留言失败")
     }
-
-    setMessages([message, ...messages])
-    setNewMessage("")
-    toast.success("留言成功！")
   }
 
-  const handleLike = (id: number) => {
+  const handleLike = (id: string) => {
     if (likedMessages.has(id)) {
       setLikedMessages((prev) => {
         const next = new Set(prev)
         next.delete(id)
         return next
       })
-      setMessages(messages.map((m) => (m.id === id ? { ...m, likes: m.likes - 1 } : m)))
     } else {
       setLikedMessages(new Set([...likedMessages, id]))
-      setMessages(messages.map((m) => (m.id === id ? { ...m, likes: m.likes + 1 } : m)))
     }
   }
 
-  const handleDelete = (id: number) => {
-    setMessages(messages.filter((m) => m.id !== id))
-    toast.success("留言已删除")
+  const handleDelete = async (id: string) => {
+    if (!confirm("确定要删除这条留言吗？")) return
+
+    try {
+      const response = await fetch(`/api/guestbook/${id}`, {
+        method: "DELETE",
+      })
+      const result = await response.json()
+      if (result.success) {
+        toast.success("留言已删除")
+        loadMessages()
+      } else {
+        toast.error(result.error || "删除留言失败")
+      }
+    } catch (error) {
+      console.error("删除留言失败:", error)
+      toast.error("删除留言失败")
+    }
   }
 
   return (
@@ -186,71 +201,81 @@ export function Guestbook() {
       </div>
 
       {/* Messages list */}
-      <div className="flex flex-col gap-3">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`group rounded-xl border p-5 transition-all duration-300 ${
-              msg.isAdmin
-                ? "border-primary/15 bg-primary/[0.03] hover:bg-primary/[0.06]"
-                : "border-border/30 bg-card/20 hover:bg-card/40 hover:border-border/50"
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <Avatar className="h-9 w-9 border border-border/40 shrink-0">
-                <AvatarFallback
-                  className={`text-xs font-mono ${
-                    msg.isAdmin
-                      ? "bg-primary/15 text-primary"
-                      : "bg-secondary/50 text-muted-foreground/60"
-                  }`}
-                >
-                  {msg.avatar}
-                </AvatarFallback>
-              </Avatar>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className={`text-sm font-medium ${msg.isAdmin ? "text-primary" : "text-foreground/90"}`}>
-                    {msg.author}
-                  </span>
-                  {msg.isAdmin && (
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/15">
-                      作者
-                    </span>
-                  )}
-                  <span className="text-xs text-muted-foreground/30">{msg.date}</span>
-                </div>
-                <p className="text-sm text-foreground/65 leading-relaxed">
-                  {msg.message}
-                </p>
-                <div className="flex items-center gap-3 mt-3">
-                  <button
-                    onClick={() => handleLike(msg.id)}
-                    className={`flex items-center gap-1.5 text-xs transition-colors duration-300 ${
-                      likedMessages.has(msg.id)
-                        ? "text-destructive"
-                        : "text-muted-foreground/30 hover:text-destructive"
+      {loading ? (
+        <div className="text-center py-10">
+          <p className="text-sm text-muted-foreground/40">加载中...</p>
+        </div>
+      ) : messages.length === 0 ? (
+        <div className="text-center py-10">
+          <p className="text-sm text-muted-foreground/40">暂无留言，快来留下第一条留言吧！</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`group rounded-xl border p-5 transition-all duration-300 ${
+                msg.author.isAdmin
+                  ? "border-primary/15 bg-primary/[0.03] hover:bg-primary/[0.06]"
+                  : "border-border/30 bg-card/20 hover:bg-card/40 hover:border-border/50"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <Avatar className="h-9 w-9 border border-border/40 shrink-0">
+                  <AvatarFallback
+                    className={`text-xs font-mono ${
+                      msg.author.isAdmin
+                        ? "bg-primary/15 text-primary"
+                        : "bg-secondary/50 text-muted-foreground/60"
                     }`}
                   >
-                    <Heart className={`h-3.5 w-3.5 ${likedMessages.has(msg.id) ? "fill-current" : ""}`} />
-                    {msg.likes}
-                  </button>
-                  {isLoggedIn && user && (user.isAdmin || msg.author === user.name) && (
+                    {msg.author.avatar}
+                  </AvatarFallback>
+                </Avatar>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className={`text-sm font-medium ${msg.author.isAdmin ? "text-primary" : "text-foreground/90"}`}>
+                      {msg.author.name}
+                    </span>
+                    {msg.author.isAdmin && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/15">
+                        作者
+                      </span>
+                    )}
+                    <span className="text-xs text-muted-foreground/30">{formatTime(msg.createdAt)}</span>
+                  </div>
+                  <p className="text-sm text-foreground/65 leading-relaxed">
+                    {msg.message}
+                  </p>
+                  <div className="flex items-center gap-3 mt-3">
                     <button
-                      onClick={() => handleDelete(msg.id)}
-                      className="flex items-center gap-1.5 text-xs text-muted-foreground/20 hover:text-destructive transition-colors duration-300 opacity-0 group-hover:opacity-100"
+                      onClick={() => handleLike(msg.id)}
+                      className={`flex items-center gap-1.5 text-xs transition-colors duration-300 ${
+                        likedMessages.has(msg.id)
+                          ? "text-destructive"
+                          : "text-muted-foreground/30 hover:text-destructive"
+                      }`}
                     >
-                      <Trash2 className="h-3 w-3" />
-                      删除
+                      <Heart className={`h-3.5 w-3.5 ${likedMessages.has(msg.id) ? "fill-current" : ""}`} />
+                      点赞
                     </button>
-                  )}
+                    {isLoggedIn && user && (user.isAdmin || msg.author.id === user.id) && (
+                      <button
+                        onClick={() => handleDelete(msg.id)}
+                        className="flex items-center gap-1.5 text-xs text-muted-foreground/20 hover:text-destructive transition-colors duration-300 opacity-0 group-hover:opacity-100"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        删除
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
