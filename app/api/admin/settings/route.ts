@@ -191,8 +191,10 @@ export async function PUT(request: NextRequest) {
     })
   } catch (error) {
     console.error('更新设置失败:', error)
+    // 返回更详细的错误信息
+    const errorMessage = error instanceof Error ? error.message : '更新设置失败'
     return NextResponse.json(
-      { success: false, error: '更新设置失败' },
+      { success: false, error: errorMessage },
       { status: 500 }
     )
   }

@@ -111,6 +111,7 @@ export async function initAuth(): Promise<void> {
     return initPromise
   }
 
+  // 创建初始化 Promise
   initPromise = (async () => {
     try {
       const user = await fetchCurrentUser()
@@ -127,6 +128,8 @@ export async function initAuth(): Promise<void> {
         isLoggedIn: false,
         isLoading: false,
       }
+      // 初始化失败也应该标记为已完成，避免无限重试
+      isInitialized = true
     }
     emitChange()
   })()

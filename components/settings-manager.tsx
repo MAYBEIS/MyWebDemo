@@ -39,8 +39,8 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
         })
 
         const result = await response.json()
-        if (!result.success) {
-          throw new Error(result.error || '保存失败')
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || `保存失败: ${response.statusText}`)
         }
       }
       toast.success('设置已保存')
