@@ -8,6 +8,7 @@ import {
   Users,
   MessageSquare,
   Settings,
+  ShoppingCart,
   ChevronRight,
 } from "lucide-react"
 
@@ -31,6 +32,11 @@ const menuItems = [
     href: "/admin/comments",
     label: "评论管理",
     icon: MessageSquare,
+  },
+  {
+    href: "/admin/shop",
+    label: "商店管理",
+    icon: ShoppingCart,
   },
   {
     href: "/admin/settings",

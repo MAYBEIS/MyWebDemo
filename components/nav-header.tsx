@@ -25,6 +25,7 @@ const navLinks = [
   { href: "/", label: "首页" },
   { href: "/blog", label: "博客" },
   { href: "/projects", label: "项目" },
+  { href: "/shop", label: "商店" },
   { href: "/trending", label: "热榜" },
   { href: "/quiz", label: "每日挑战" },
   { href: "/about", label: "关于" },

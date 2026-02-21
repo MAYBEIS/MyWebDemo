@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth, updateProfile, logout } from "@/lib/auth-store"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import {
   User,
   Mail,
@@ -18,9 +19,23 @@ import {
   Shield,
   Camera,
   Loader2,
+  Crown,
+  ShoppingBag,
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
+
+// 会员信息类型
+interface Membership {
+  id: string
+  type: string
+  startDate: string
+  endDate: string
+  status: string
+  products: {
+    name: string
+  }
+}
 
 // 获取用户头像首字母
 function getAvatarInitials(name: string, avatar: string | null): string {
@@ -41,6 +56,26 @@ export function UserProfile() {
   const [editBio, setEditBio] = useState("")
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [membership, setMembership] = useState<Membership | null>(null)
+
+  // 获取会员信息
+  useEffect(() => {
+    if (isLoggedIn && user) {
+      fetchMembership()
+    }
+  }, [isLoggedIn, user])
+
+  const fetchMembership = async () => {
+    try {
+      const response = await fetch('/api/shop/membership')
+      const data = await response.json()
+      if (data.success && data.data) {
+        setMembership(data.data)
+      }
+    } catch (error) {
+      console.error('获取会员信息失败:', error)
+    }
+  }
 
   if (!isLoggedIn || !user) {
     return (
@@ -240,6 +275,62 @@ export function UserProfile() {
               </>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* 会员状态卡片 */}
+      <div className="rounded-xl border border-border/40 bg-card/30 p-6 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <Crown className="h-5 w-5 text-primary" />
+            会员状态
+          </h3>
+          <Link href="/shop">
+            <Button size="sm" variant="outline" className="gap-1.5">
+              <ShoppingBag className="h-3.5 w-3.5" />
+              购买会员
+            </Button>
+          </Link>
+        </div>
+        
+        {membership ? (
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="font-medium">{membership.products?.name || '会员'}</span>
+                <Badge variant={membership.status === 'active' ? 'default' : 'secondary'}>
+                  {membership.status === 'active' ? '有效' : membership.status}
+                </Badge>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                有效期至: {new Date(membership.endDate).toLocaleDateString('zh-CN')}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-4">
+            <p className="text-muted-foreground mb-2">暂无会员</p>
+            <p className="text-sm text-muted-foreground/60">购买会员享受更多特权</p>
+          </div>
+        )}
+      </div>
+
+      {/* 快捷链接 */}
+      <div className="rounded-xl border border-border/40 bg-card/30 p-6">
+        <h3 className="text-lg font-semibold mb-4">快捷入口</h3>
+        <div className="flex gap-4">
+          <Link href="/orders">
+            <Button variant="outline" className="gap-2">
+              <ShoppingBag className="h-4 w-4" />
+              我的订单
+            </Button>
+          </Link>
+          <Link href="/shop">
+            <Button variant="outline" className="gap-2">
+              <Crown className="h-4 w-4" />
+              商店
+            </Button>
+          </Link>
         </div>
       </div>
     </div>
