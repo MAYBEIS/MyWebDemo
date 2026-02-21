@@ -49,7 +49,9 @@ interface Product {
   status: boolean
   sortOrder: number
   createdAt: string
-  availableStock?: number
+  _count?: {
+    product_keys: number
+  }
 }
 
 // 产品类型选项
@@ -59,9 +61,13 @@ const productTypes = [
   { value: 'digital', label: '数字产品' }
 ]
 
-export function ProductsShopManager() {
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
+interface ProductsShopManagerProps {
+  initialProducts?: Product[]
+}
+
+export function ProductsShopManager({ initialProducts }: ProductsShopManagerProps) {
+  const [products, setProducts] = useState<Product[]>(initialProducts || [])
+  const [loading, setLoading] = useState(!initialProducts)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [saving, setSaving] = useState(false)
@@ -407,7 +413,7 @@ export function ProductsShopManager() {
                     {product.stock === -1 ? (
                       <Badge variant="outline">无限</Badge>
                     ) : (
-                      <span>{product.availableStock ?? product.stock}</span>
+                      <span>{product._count?.product_keys ?? product.stock}</span>
                     )}
                   </TableCell>
                   <TableCell>

@@ -71,9 +71,13 @@ const orderStatusMap: Record<string, { label: string; variant: 'default' | 'seco
   refunded: { label: '已退款', variant: 'secondary' }
 }
 
-export function OrdersManager() {
-  const [orders, setOrders] = useState<Order[]>([])
-  const [loading, setLoading] = useState(true)
+interface OrdersManagerProps {
+  initialOrders?: Order[]
+}
+
+export function OrdersManager({ initialOrders }: OrdersManagerProps) {
+  const [orders, setOrders] = useState<Order[]>(initialOrders || [])
+  const [loading, setLoading] = useState(!initialOrders)
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [updating, setUpdating] = useState(false)
@@ -83,8 +87,10 @@ export function OrdersManager() {
 
   // 获取订单列表
   useEffect(() => {
-    fetchOrders()
-  }, [filterStatus])
+    if (!initialOrders) {
+      fetchOrders()
+    }
+  }, [initialOrders, filterStatus])
 
   const fetchOrders = async () => {
     try {

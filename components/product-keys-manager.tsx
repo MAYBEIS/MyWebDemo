@@ -77,10 +77,14 @@ const keyStatusMap: Record<string, { label: string; variant: 'default' | 'second
   expired: { label: '已过期', variant: 'destructive' }
 }
 
-export function ProductKeysManager() {
-  const [keys, setKeys] = useState<ProductKey[]>([])
+interface ProductKeysManagerProps {
+  initialKeys?: ProductKey[]
+}
+
+export function ProductKeysManager({ initialKeys }: ProductKeysManagerProps) {
+  const [keys, setKeys] = useState<ProductKey[]>(initialKeys || [])
   const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!initialKeys)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
@@ -98,9 +102,11 @@ export function ProductKeysManager() {
 
   // 获取密钥列表
   useEffect(() => {
-    fetchKeys()
+    if (!initialKeys) {
+      fetchKeys()
+    }
     fetchProducts()
-  }, [filterProductId, filterStatus])
+  }, [initialKeys, filterProductId, filterStatus])
 
   const fetchKeys = async () => {
     try {

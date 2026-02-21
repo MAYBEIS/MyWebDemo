@@ -24,8 +24,8 @@ interface PaymentChannel {
   name: string
   code: string
   enabled: boolean
-  config: Record<string, string>
-  description: string
+  config: Record<string, string> | string
+  description: string | null
 }
 
 // 支付渠道配置字段定义
@@ -52,9 +52,13 @@ const channelNames: Record<string, string> = {
   alipay: '支付宝'
 }
 
-export function PaymentChannelManager() {
-  const [channels, setChannels] = useState<PaymentChannel[]>([])
-  const [loading, setLoading] = useState(true)
+interface PaymentChannelManagerProps {
+  initialChannels?: PaymentChannel[]
+}
+
+export function PaymentChannelManager({ initialChannels }: PaymentChannelManagerProps) {
+  const [channels, setChannels] = useState<PaymentChannel[]>(initialChannels || [])
+  const [loading, setLoading] = useState(!initialChannels)
   const [saving, setSaving] = useState(false)
   const [configDialogOpen, setConfigDialogOpen] = useState(false)
   const [selectedChannel, setSelectedChannel] = useState<PaymentChannel | null>(null)
@@ -62,8 +66,10 @@ export function PaymentChannelManager() {
   const [showSecret, setShowSecret] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
-    fetchChannels()
-  }, [])
+    if (!initialChannels) {
+      fetchChannels()
+    }
+  }, [initialChannels])
 
   const fetchChannels = async () => {
     try {
@@ -108,7 +114,11 @@ export function PaymentChannelManager() {
   // 打开配置对话框
   const handleOpenConfig = (channel: PaymentChannel) => {
     setSelectedChannel(channel)
-    setEditedConfig({ ...channel.config })
+    // 解析config，可能是字符串或对象
+    const configObj = typeof channel.config === 'string' 
+      ? JSON.parse(channel.config) 
+      : channel.config
+    setEditedConfig({ ...configObj })
     setConfigDialogOpen(true)
   }
 
@@ -166,7 +176,11 @@ export function PaymentChannelManager() {
       '支付宝公钥': 'alipayPublicKey',
     }
     const key = keyMap[fieldLabel] || fieldLabel
-    return channel.config[key] || ''
+    // 解析config，可能是字符串或对象
+    const configObj = typeof channel.config === 'string' 
+      ? JSON.parse(channel.config) 
+      : channel.config
+    return configObj[key] || ''
   }
 
   // 设置配置字段值
