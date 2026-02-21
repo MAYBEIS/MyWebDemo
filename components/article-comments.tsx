@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { MessageSquare, ThumbsUp, Reply, ChevronDown, ChevronUp, Send, Trash2, Pencil, Loader2, Check, X } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -65,6 +65,7 @@ function CommentItem({
   onDelete,
   onEdit,
   currentUserId,
+  maxDepth,
 }: {
   comment: Comment
   depth: number
@@ -74,10 +75,12 @@ function CommentItem({
   onDelete: (id: string) => void
   onEdit: (id: string, content: string) => void
   currentUserId?: string
+  maxDepth: number
 }) {
   const [showReplyInput, setShowReplyInput] = useState(false)
   const [replyText, setReplyText] = useState("")
-  const [showReplies, setShowReplies] = useState(depth < 1)
+  // 默认展开的回复深度
+  const [showReplies, setShowReplies] = useState(depth < maxDepth)
   const [isEditing, setIsEditing] = useState(false)
   const [editText, setEditText] = useState(comment.content)
   const [isSaving, setIsSaving] = useState(false)
@@ -180,7 +183,7 @@ function CommentItem({
                 toast.error("请先登录后再回复")
                 return
               }
-              setShowReplyInput(!showReplyInput)
+              setShowReplyInput(true)
             }}
             className="flex items-center gap-1.5 text-xs text-muted-foreground/40 hover:text-primary transition-colors duration-300"
           >
@@ -209,14 +212,14 @@ function CommentItem({
             </button>
           )}
             {comment.replies && comment.replies.length > 0 && (
-            <button
-              onClick={() => setShowReplies(!showReplies)}
-              className="flex items-center gap-1 text-xs text-muted-foreground/40 hover:text-primary transition-colors duration-300 ml-auto"
-            >
-              {showReplies ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              {comment.replies.length} 条回复
-            </button>
-          )}
+              <button
+                onClick={() => setShowReplies(!showReplies)}
+                className="flex items-center gap-1 text-xs text-muted-foreground/40 hover:text-primary transition-colors duration-300 ml-auto"
+              >
+                {showReplies ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                {comment.replies.length} 条回复
+              </button>
+            )}
         </div>
 
         {showReplyInput && (
@@ -252,6 +255,7 @@ function CommentItem({
               onDelete={onDelete}
               onEdit={onEdit}
               currentUserId={currentUserId}
+              maxDepth={maxDepth}
             />
           ))}
         </div>
@@ -266,6 +270,13 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
   const [newComment, setNewComment] = useState("")
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set())
   const { user, isLoggedIn } = useAuth()
+
+  // 从环境变量获取评论最大深度配置
+  const maxReplyDepth = useMemo(() => {
+    const envDepth = process.env.NEXT_PUBLIC_COMMENT_MAX_DEPTH
+    const depth = parseInt(envDepth || "3", 10)
+    return isNaN(depth) ? 3 : Math.min(Math.max(depth, 1), 5)
+  }, [])
 
   // 加载评论
   useEffect(() => {
@@ -333,8 +344,19 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
     }
   }
 
+  // 处理评论回复
   const handleReply = async (parentId: string, content: string) => {
-    if (!user) return
+    console.log("handleReply called with:", { parentId, content, postId, user: user?.id })
+    
+    if (!user) {
+      toast.error("请先登录后再回复")
+      return
+    }
+
+    if (!parentId) {
+      toast.error("评论 ID 无效")
+      return
+    }
 
     try {
       const response = await fetch("/api/comments", {
@@ -346,7 +368,11 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
           parentId,
         }),
       })
+      
+      console.log("Reply response status:", response.status)
       const result = await response.json()
+      console.log("Reply result:", result)
+      
       if (result.success) {
         toast.success("回复成功！")
         loadComments()
@@ -355,7 +381,7 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
       }
     } catch (error) {
       console.error("回复失败:", error)
-      toast.error("回复失败")
+      toast.error("回复失败，请稍后重试")
     }
   }
 
@@ -483,6 +509,7 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
               onDelete={handleDelete}
               onEdit={handleEdit}
               currentUserId={user?.id}
+              maxDepth={maxReplyDepth}
             />
           ))}
         </div>
