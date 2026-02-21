@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth, updateProfile, logout } from "@/lib/auth-store"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -16,6 +16,8 @@ import {
   Check,
   X,
   Shield,
+  Camera,
+  Loader2,
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -37,6 +39,8 @@ export function UserProfile() {
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState("")
   const [editBio, setEditBio] = useState("")
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   if (!isLoggedIn || !user) {
     return (
@@ -79,6 +83,56 @@ export function UserProfile() {
     router.push("/")
   }
 
+  // 处理头像上传
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // 验证文件类型
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('只支持 JPG、PNG、GIF、WebP 格式的图片')
+      return
+    }
+
+    // 验证文件大小
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('图片大小不能超过 2MB')
+      return
+    }
+
+    setIsUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('avatar', file)
+
+      const response = await fetch('/api/auth/avatar', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // 更新本地状态
+        updateProfile({ avatar: result.data.avatar })
+        toast.success('头像上传成功')
+      } else {
+        toast.error(result.error || '上传失败')
+      }
+    } catch (error) {
+      console.error('上传头像失败:', error)
+      toast.error('上传失败，请稍后重试')
+    } finally {
+      setIsUploading(false)
+      // 清空 input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
   return (
     <div>
       <span className="text-xs font-mono text-primary/60 mb-3 block tracking-wider uppercase">{"// profile"}</span>
@@ -90,10 +144,32 @@ export function UserProfile() {
           {/* Avatar */}
           <div className="relative shrink-0">
             <Avatar className="h-24 w-24 border-2 border-primary/20 shadow-xl shadow-primary/5">
+              {user.avatar ? (
+                <AvatarImage src={user.avatar} alt={user.name} />
+              ) : null}
               <AvatarFallback className="bg-primary/10 text-primary text-2xl font-mono font-bold">
                 {getAvatarInitials(user.name, user.avatar)}
               </AvatarFallback>
             </Avatar>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              onChange={handleAvatarUpload}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 disabled:opacity-50 transition-all duration-300"
+              title="上传头像"
+            >
+              {isUploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Camera className="h-4 w-4" />
+              )}
+            </button>
             {user.isAdmin && (
               <div className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary border-[3px] border-card">
                 <Shield className="h-3.5 w-3.5 text-primary-foreground" />

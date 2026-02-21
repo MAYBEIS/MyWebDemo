@@ -230,3 +230,86 @@ export async function DELETE(request: NextRequest) {
     )
   }
 }
+
+/**
+ * PUT /api/comments
+ * 修改评论
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const user = await getCurrentUser(request)
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: '请先登录' },
+        { status: 401 }
+      )
+    }
+
+    const body = await request.json()
+    const { id, content } = body
+
+    if (!id || !content?.trim()) {
+      return NextResponse.json(
+        { success: false, error: '缺少必要参数' },
+        { status: 400 }
+      )
+    }
+
+    // 查找评论
+    const comment = await prisma.comments.findUnique({
+      where: { id }
+    })
+
+    if (!comment) {
+      return NextResponse.json(
+        { success: false, error: '评论不存在' },
+        { status: 404 }
+      )
+    }
+
+    // 检查权限：管理员或评论作者可以修改
+    if (!user.isAdmin && comment.authorId !== user.id) {
+      return NextResponse.json(
+        { success: false, error: '无权修改此评论' },
+        { status: 403 }
+      )
+    }
+
+    // 更新评论
+    const updatedComment = await prisma.comments.update({
+      where: { id },
+      data: {
+        content: content.trim(),
+        updatedAt: new Date(),
+      },
+      include: {
+        users: {
+          select: { id: true, name: true, avatar: true, isAdmin: true }
+        }
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        id: updatedComment.id,
+        content: updatedComment.content,
+        createdAt: updatedComment.createdAt,
+        updatedAt: updatedComment.updatedAt,
+        author: {
+          id: updatedComment.users.id,
+          name: updatedComment.users.name,
+          avatar: updatedComment.users.avatar,
+          isAdmin: updatedComment.users.isAdmin,
+        },
+      },
+    })
+  } catch (error) {
+    console.error('修改评论失败:', error)
+    return NextResponse.json(
+      { success: false, error: '修改评论失败' },
+      { status: 500 }
+    )
+  }
+}

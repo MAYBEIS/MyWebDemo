@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { MessageSquare, ThumbsUp, Reply, ChevronDown, ChevronUp, Send, Trash2 } from "lucide-react"
+import { MessageSquare, ThumbsUp, Reply, ChevronDown, ChevronUp, Send, Trash2, Pencil, Loader2, Check, X } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -63,6 +63,7 @@ function CommentItem({
   onLike,
   onReply,
   onDelete,
+  onEdit,
   currentUserId,
 }: {
   comment: Comment
@@ -71,11 +72,15 @@ function CommentItem({
   onLike: (id: string) => void
   onReply: (parentId: string, content: string) => void
   onDelete: (id: string) => void
+  onEdit: (id: string, content: string) => void
   currentUserId?: string
 }) {
   const [showReplyInput, setShowReplyInput] = useState(false)
   const [replyText, setReplyText] = useState("")
   const [showReplies, setShowReplies] = useState(depth < 1)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editText, setEditText] = useState(comment.content)
+  const [isSaving, setIsSaving] = useState(false)
   const { isLoggedIn } = useAuth()
 
   const handleReply = () => {
@@ -85,7 +90,23 @@ function CommentItem({
     setShowReplyInput(false)
   }
 
+  // 处理编辑保存
+  const handleEditSave = async () => {
+    if (!editText.trim() || editText === comment.content) {
+      setIsEditing(false)
+      return
+    }
+    setIsSaving(true)
+    try {
+      await onEdit(comment.id, editText)
+      setIsEditing(false)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const isAuthor = comment.author.isAdmin
+  const canEdit = currentUserId && (currentUserId === comment.author.id || comment.author.isAdmin)
   const canDelete = currentUserId && (currentUserId === comment.author.id || comment.author.isAdmin)
 
   return (
@@ -109,9 +130,40 @@ function CommentItem({
             <span className="text-xs text-muted-foreground/40">{formatTime(comment.createdAt)}</span>
           </div>
         </div>
-        <p className="text-sm text-foreground/70 leading-relaxed mb-4 pl-11">
-          {comment.content}
-        </p>
+        {/* 内容：编辑模式或显示模式 */}
+        {isEditing ? (
+          <div className="mt-3 pl-11">
+            <Textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              className="bg-background/30 border-border/40 focus:border-primary/40 min-h-[80px] resize-none rounded-lg text-sm mb-2"
+            />
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleEditSave}
+                disabled={isSaving}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5"
+              >
+                {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                保存
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsEditing(false)}
+                className="border-border/40 gap-1.5"
+              >
+                <X className="h-3.5 w-3.5" />
+                取消
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-foreground/70 leading-relaxed mb-4 pl-11">
+            {comment.content}
+          </p>
+        )}
         <div className="flex items-center gap-4 pl-11">
           <button
             onClick={() => onLike(comment.id)}
@@ -142,6 +194,18 @@ function CommentItem({
             >
               <Trash2 className="h-3 w-3" />
               删除
+            </button>
+          )}
+          {canEdit && (
+            <button
+              onClick={() => {
+                setEditText(comment.content)
+                setIsEditing(true)
+              }}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground/20 hover:text-primary transition-colors duration-300"
+            >
+              <Pencil className="h-3 w-3" />
+              编辑
             </button>
           )}
           {comment.replies.length > 0 && (
@@ -186,6 +250,7 @@ function CommentItem({
               onLike={onLike}
               onReply={onReply}
               onDelete={onDelete}
+              onEdit={onEdit}
               currentUserId={currentUserId}
             />
           ))}
@@ -314,6 +379,27 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
     }
   }
 
+  // 处理评论编辑
+  const handleEdit = async (commentId: string, content: string) => {
+    try {
+      const response = await fetch('/api/comments', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: commentId, content }),
+      })
+      const result = await response.json()
+      if (result.success) {
+        toast.success('评论已更新')
+        loadComments()
+      } else {
+        toast.error(result.error || '修改评论失败')
+      }
+    } catch (error) {
+      console.error('修改评论失败:', error)
+      toast.error('修改评论失败')
+    }
+  }
+
   const totalCount = (items: Comment[]): number =>
     items.reduce((sum, c) => sum + 1 + totalCount(c.replies), 0)
 
@@ -392,6 +478,7 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
               onLike={handleLike}
               onReply={handleReply}
               onDelete={handleDelete}
+              onEdit={handleEdit}
               currentUserId={user?.id}
             />
           ))}
