@@ -97,8 +97,8 @@ function CommentItem({
 }) {
   const [showReplyInput, setShowReplyInput] = useState(false)
   const [replyText, setReplyText] = useState("")
-  // 默认展开所有回复
-  const [showReplies, setShowReplies] = useState(true)
+  // 顶级评论(depth=0)默认折叠(展开为false)，子评论默认展开(展开为true)
+  const [showReplies, setShowReplies] = useState(depth === 0 ? false : true)
   const [isEditing, setIsEditing] = useState(false)
   const [editText, setEditText] = useState(comment.content)
   const [isSaving, setIsSaving] = useState(false)
