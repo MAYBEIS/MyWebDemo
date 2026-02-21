@@ -11,9 +11,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Loader2, ShoppingBag, Eye, Copy, Check } from 'lucide-react'
+import { Loader2, ShoppingBag, Eye, Copy, Check, QrCode, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/lib/auth-store'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 
 // 订单类型定义
@@ -58,8 +58,15 @@ export default function OrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   
+  // 微信支付相关状态
+  const [payQrDialogOpen, setPayQrDialogOpen] = useState(false)
+  const [payQrCodeUrl, setPayQrCodeUrl] = useState<string | null>(null)
+  const [payingOrder, setPayingOrder] = useState<Order | null>(null)
+  const [checkingPayment, setCheckingPayment] = useState(false)
+  
   const { isLoggedIn } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -68,6 +75,55 @@ export default function OrdersPage() {
     }
     fetchOrders()
   }, [isLoggedIn, router])
+
+  // 处理从商店页面跳转过来的支付请求
+  useEffect(() => {
+    const payOrderId = searchParams.get('pay')
+    const codeUrl = searchParams.get('codeUrl')
+    
+    if (payOrderId && codeUrl) {
+      // 查找对应的订单
+      const order = orders.find(o => o.id === payOrderId)
+      if (order && order.status === 'pending') {
+        setPayingOrder(order)
+        setPayQrCodeUrl(decodeURIComponent(codeUrl))
+        setPayQrDialogOpen(true)
+        // 清除URL参数
+        router.replace('/orders')
+      }
+    }
+  }, [orders, searchParams, router])
+
+  // 轮询检查支付状态
+  useEffect(() => {
+    if (!payQrDialogOpen || !payingOrder) return
+
+    const checkPayment = async () => {
+      setCheckingPayment(true)
+      try {
+        const response = await fetch(`/api/shop/wechat-pay?orderNo=${payingOrder.orderNo}`)
+        const data = await response.json()
+        
+        if (data.success && data.data.tradeState === 'SUCCESS') {
+          toast.success('支付成功！')
+          setPayQrDialogOpen(false)
+          fetchOrders() // 刷新订单列表
+        }
+      } catch (error) {
+        console.error('检查支付状态失败:', error)
+      } finally {
+        setCheckingPayment(false)
+      }
+    }
+
+    // 每3秒检查一次支付状态
+    const interval = setInterval(checkPayment, 3000)
+    
+    // 立即检查一次
+    checkPayment()
+
+    return () => clearInterval(interval)
+  }, [payQrDialogOpen, payingOrder])
 
   const fetchOrders = async () => {
     try {
@@ -88,6 +144,56 @@ export default function OrdersPage() {
   const handleViewDetail = (order: Order) => {
     setSelectedOrder(order)
     setDetailDialogOpen(true)
+  }
+
+  // 发起微信支付
+  const handleWechatPay = async (order: Order) => {
+    setPayingOrder(order)
+    try {
+      const response = await fetch('/api/shop/wechat-pay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id,
+          tradeType: 'NATIVE'
+        })
+      })
+
+      const data = await response.json()
+      if (data.success && data.data.codeUrl) {
+        setPayQrCodeUrl(data.data.codeUrl)
+        setPayQrDialogOpen(true)
+      } else {
+        toast.error(data.error || '创建支付订单失败')
+      }
+    } catch (error) {
+      console.error('发起微信支付失败:', error)
+      toast.error('发起支付失败')
+    }
+  }
+
+  // 手动刷新支付状态
+  const handleRefreshPayment = async () => {
+    if (!payingOrder) return
+    
+    setCheckingPayment(true)
+    try {
+      const response = await fetch(`/api/shop/wechat-pay?orderNo=${payingOrder.orderNo}`)
+      const data = await response.json()
+      
+      if (data.success && data.data.tradeState === 'SUCCESS') {
+        toast.success('支付成功！')
+        setPayQrDialogOpen(false)
+        fetchOrders()
+      } else {
+        toast.info('暂未检测到支付，请完成扫码支付后重试')
+      }
+    } catch (error) {
+      console.error('检查支付状态失败:', error)
+      toast.error('检查支付状态失败')
+    } finally {
+      setCheckingPayment(false)
+    }
   }
 
   // 复制密钥
@@ -168,14 +274,26 @@ export default function OrdersPage() {
                       <div className="font-bold text-lg">{formatPrice(order.amount)}</div>
                       {getStatusBadge(order.status)}
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleViewDetail(order)}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      详情
-                    </Button>
+                    <div className="flex gap-2">
+                      {/* 待支付订单显示微信支付按钮 */}
+                      {order.status === 'pending' && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleWechatPay(order)}
+                        >
+                          <QrCode className="h-4 w-4 mr-1" />
+                          微信支付
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewDetail(order)}
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        详情
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
@@ -241,7 +359,10 @@ export default function OrdersPage() {
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">支付方式</div>
-                  <div className="font-medium">{selectedOrder.paymentMethod || '-'}</div>
+                  <div className="font-medium">
+                    {selectedOrder.paymentMethod === 'wechat' ? '微信支付' : 
+                     selectedOrder.paymentMethod || '-'}
+                  </div>
                 </div>
               </div>
 
@@ -282,8 +403,95 @@ export default function OrdersPage() {
                   </div>
                 </div>
               )}
+
+              {/* 待支付订单显示支付按钮 */}
+              {selectedOrder.status === 'pending' && (
+                <div className="pt-4 border-t">
+                  <Button 
+                    className="w-full"
+                    onClick={() => {
+                      setDetailDialogOpen(false)
+                      handleWechatPay(selectedOrder)
+                    }}
+                  >
+                    <QrCode className="h-4 w-4 mr-2" />
+                    微信支付
+                  </Button>
+                </div>
+              )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 微信支付二维码对话框 */}
+      <Dialog open={payQrDialogOpen} onOpenChange={setPayQrDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>微信支付</DialogTitle>
+            <DialogDescription>
+              请使用微信扫描下方二维码完成支付
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col items-center py-4">
+            {/* 二维码显示区域 */}
+            <div className="bg-white p-4 rounded-lg border mb-4">
+              {payQrCodeUrl ? (
+                // 使用第三方二维码生成服务
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payQrCodeUrl)}`}
+                  alt="微信支付二维码"
+                  className="w-[200px] h-[200px]"
+                />
+              ) : (
+                <div className="w-[200px] h-[200px] flex items-center justify-center bg-muted">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              )}
+            </div>
+
+            {/* 订单信息 */}
+            {payingOrder && (
+              <div className="text-center mb-4 w-full">
+                <div className="text-sm text-muted-foreground mb-1">
+                  {payingOrder.products?.name}
+                </div>
+                <div className="text-2xl font-bold text-primary">
+                  {formatPrice(payingOrder.amount)}
+                </div>
+              </div>
+            )}
+
+            {/* 支付状态提示 */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+              {checkingPayment ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>正在检查支付状态...</span>
+                </>
+              ) : (
+                <>
+                  <span>等待支付中...</span>
+                </>
+              )}
+            </div>
+
+            {/* 手动刷新按钮 */}
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleRefreshPayment}
+              disabled={checkingPayment}
+            >
+              {checkingPayment ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              我已支付，刷新状态
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

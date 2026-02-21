@@ -5,7 +5,22 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ShoppingCart, Crown, Key, Check, Loader2 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { ShoppingCart, Crown, Key, Check, Loader2, CreditCard, QrCode } from 'lucide-react'
 import { useAuth } from '@/lib/auth-store'
 import { toast } from 'sonner'
 
@@ -37,12 +52,23 @@ const productTypeNames: Record<string, string> = {
   digital: '数字产品'
 }
 
+// 支付方式
+const paymentMethods: Record<string, { label: string; icon: any; description: string }> = {
+  wechat: { label: '微信支付', icon: QrCode, description: '使用微信扫码支付' },
+  manual: { label: '人工处理', icon: CreditCard, description: '联系管理员手动确认' }
+}
+
 export default function ShopPage() {
   const { user, isLoggedIn } = useAuth()
   const router = useRouter()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [purchasing, setPurchasing] = useState<string | null>(null)
+  
+  // 支付方式选择相关状态
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('wechat')
 
   // 获取产品列表
   useEffect(() => {
@@ -64,31 +90,64 @@ export default function ShopPage() {
     }
   }
 
-  // 购买产品
-  const handlePurchase = async (product: Product) => {
+  // 点击购买按钮，打开支付方式选择对话框
+  const handlePurchaseClick = (product: Product) => {
     if (!isLoggedIn) {
       toast.error('请先登录')
       router.push('/login')
       return
     }
+    setSelectedProduct(product)
+    setPaymentDialogOpen(true)
+  }
 
-    setPurchasing(product.id)
+  // 确认购买
+  const handleConfirmPurchase = async () => {
+    if (!selectedProduct) return
+
+    setPaymentDialogOpen(false)
+    setPurchasing(selectedProduct.id)
+    
     try {
+      // 创建订单
       const response = await fetch('/api/shop/orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          productId: product.id
+          productId: selectedProduct.id,
+          paymentMethod: selectedPaymentMethod
         })
       })
 
       const data = await response.json()
       if (data.success) {
-        toast.success('订单创建成功，正在跳转到订单页面...')
-        // 跳转到订单页面
-        router.push('/orders')
+        // 如果选择微信支付，调用微信支付接口
+        if (selectedPaymentMethod === 'wechat') {
+          const payResponse = await fetch('/api/shop/wechat-pay', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              orderId: data.data.id,
+              tradeType: 'NATIVE'
+            })
+          })
+
+          const payData = await payResponse.json()
+          if (payData.success && payData.data.codeUrl) {
+            // 跳转到订单页面，显示支付二维码
+            router.push(`/orders?pay=${data.data.id}&codeUrl=${encodeURIComponent(payData.data.codeUrl)}`)
+          } else {
+            toast.error(payData.error || '创建支付订单失败')
+            router.push('/orders')
+          }
+        } else {
+          toast.success('订单创建成功，请等待管理员确认')
+          router.push('/orders')
+        }
       } else {
         toast.error(data.error || '创建订单失败')
       }
@@ -197,7 +256,7 @@ export default function ShopPage() {
                 <CardFooter className="flex flex-col gap-2">
                   <Button
                     className="w-full"
-                    onClick={() => handlePurchase(product)}
+                    onClick={() => handlePurchaseClick(product)}
                     disabled={!stockStatus.available || purchasing === product.id}
                   >
                     {purchasing === product.id ? (
@@ -223,6 +282,70 @@ export default function ShopPage() {
           </p>
         </div>
       )}
+
+      {/* 支付方式选择对话框 */}
+      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>选择支付方式</DialogTitle>
+            <DialogDescription>
+              您正在购买: {selectedProduct?.name}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="mb-4">
+              <div className="text-sm text-muted-foreground mb-2">订单金额</div>
+              <div className="text-2xl font-bold text-primary">
+                {selectedProduct && `¥${selectedProduct.price.toFixed(2)}`}
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="text-sm text-muted-foreground">选择支付方式</div>
+              {Object.entries(paymentMethods).map(([key, method]) => {
+                const MethodIcon = method.icon
+                return (
+                  <div
+                    key={key}
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                      selectedPaymentMethod === key
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary/50'
+                    }`}
+                    onClick={() => setSelectedPaymentMethod(key)}
+                  >
+                    <div className={`p-2 rounded-full ${
+                      selectedPaymentMethod === key ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                    }`}>
+                      <MethodIcon className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium">{method.label}</div>
+                      <div className="text-xs text-muted-foreground">{method.description}</div>
+                    </div>
+                    {selectedPaymentMethod === key && (
+                      <Check className="h-4 w-4 text-primary" />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPaymentDialogOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={handleConfirmPurchase} disabled={purchasing === selectedProduct?.id}>
+              {purchasing === selectedProduct?.id && (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              )}
+              确认购买
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
