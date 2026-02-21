@@ -1,119 +1,138 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Clock, Eye, Heart, Search, X } from "lucide-react"
+import { Clock, Eye, Heart, Search, X, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-
-const allPosts = [
-  {
-    slug: "linux-kernel-memory-management",
-    title: "深入 Linux 内核内存管理机制",
-    excerpt: "探索虚拟内存子系统、页表结构与 Linux 内核中的内存分配策略。",
-    date: "2026-01-15",
-    readTime: "12 分钟",
-    views: "2.4k",
-    likes: 128,
-    tags: ["Linux", "内核", "内存"],
-    category: "内核",
-  },
-  {
-    slug: "building-async-runtime-rust",
-    title: "用 Rust 从零实现异步运行时",
-    excerpt: "一步步指导你用 epoll 和 futures 在 Rust 中实现一个最小异步运行时。",
-    date: "2025-12-28",
-    readTime: "18 分钟",
-    views: "3.1k",
-    likes: 95,
-    tags: ["Rust", "异步", "运行时"],
-    category: "Rust",
-  },
-  {
-    slug: "tcp-stack-implementation",
-    title: "实现用户态 TCP 协议栈",
-    excerpt: "如何使用 raw sockets 和 TUN/TAP 接口在用户态构建一个最小化 TCP/IP 协议栈。",
-    date: "2025-12-10",
-    readTime: "15 分钟",
-    views: "1.8k",
-    likes: 72,
-    tags: ["网络", "C", "TCP"],
-    category: "网络",
-  },
-  {
-    slug: "compiler-optimization-passes",
-    title: "编写自定义 LLVM 优化 Pass",
-    excerpt: "用实际案例讲解如何扩展 LLVM 编译器基础设施，编写自定义优化 Pass。",
-    date: "2025-11-22",
-    readTime: "10 分钟",
-    views: "1.2k",
-    likes: 56,
-    tags: ["编译器", "LLVM", "C++"],
-    category: "编译器",
-  },
-  {
-    slug: "ebpf-observability",
-    title: "eBPF 系统可观测性：进阶实战",
-    excerpt: "使用 eBPF 程序实现高级系统追踪、性能分析与实时性能监控。",
-    date: "2025-11-05",
-    readTime: "14 分钟",
-    views: "2.0k",
-    likes: 88,
-    tags: ["eBPF", "Linux", "可观测性"],
-    category: "Linux",
-  },
-  {
-    slug: "lock-free-data-structures",
-    title: "无锁数据结构实战指南",
-    excerpt: "使用原子操作与内存序语义实现并发哈希映射和队列。",
-    date: "2025-10-18",
-    readTime: "16 分钟",
-    views: "2.7k",
-    likes: 110,
-    tags: ["并发", "C++", "原子操作"],
-    category: "并发",
-  },
-  {
-    slug: "io-uring-file-server",
-    title: "基于 io_uring 构建高性能文件服务器",
-    excerpt: "利用 Linux io_uring 异步 I/O 接口构建高性能文件服务器。",
-    date: "2025-09-30",
-    readTime: "11 分钟",
-    views: "1.5k",
-    likes: 64,
-    tags: ["io_uring", "Linux", "性能"],
-    category: "Linux",
-  },
-  {
-    slug: "rust-unsafe-patterns",
-    title: "Unsafe Rust 的安全编码模式",
-    excerpt: "编写健壮 unsafe Rust 代码的最佳实践与常见模式。",
-    date: "2025-09-12",
-    readTime: "13 分钟",
-    views: "3.8k",
-    likes: 142,
-    tags: ["Rust", "Unsafe", "模式"],
-    category: "Rust",
-  },
-]
-
-const categories = ["全部", ...Array.from(new Set(allPosts.map((p) => p.category)))]
+import { fetchPosts, fetchCategories, formatDate, calculateReadTime, formatViews, type Post } from "@/lib/api-posts"
 
 export function BlogList() {
   const [search, setSearch] = useState("")
   const [activeCategory, setActiveCategory] = useState("全部")
+  const [posts, setPosts] = useState<Post[]>([])
+  const [categories, setCategories] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
-  const filteredPosts = allPosts.filter((post) => {
+  // 加载文章和分类
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true)
+        
+        // 并行加载文章和分类
+        const [postsResult, categoriesResult] = await Promise.all([
+          fetchPosts({ page: 1, limit: 20 }),
+          fetchCategories()
+        ])
+
+        setPosts(postsResult.posts)
+        setCategories(["全部", ...categoriesResult])
+      } catch (err) {
+        console.error('Failed to load blog data:', err)
+        setError(true)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
+
+  // 搜索防抖
+  useEffect(() => {
+    const delaySearch = setTimeout(async () => {
+      if (search || activeCategory !== "全部") {
+        try {
+          setLoading(true)
+          const category = activeCategory === "全部" ? undefined : activeCategory
+          const result = await fetchPosts({ 
+            page: 1, 
+            limit: 20, 
+            search: search || undefined,
+            category
+          })
+          setPosts(result.posts)
+        } catch (err) {
+          console.error('Search failed:', err)
+        } finally {
+          setLoading(false)
+        }
+      } else if (!loading && posts.length === 0) {
+        // 初始加载
+        const result = await fetchPosts({ page: 1, limit: 20 })
+        setPosts(result.posts)
+      }
+    }, 300)
+
+    return () => clearTimeout(delaySearch)
+  }, [search, activeCategory])
+
+  // 过滤后的文章
+  const filteredPosts = posts.filter((post) => {
     const matchesSearch =
       post.title.toLowerCase().includes(search.toLowerCase()) ||
-      post.excerpt.toLowerCase().includes(search.toLowerCase()) ||
+      (post.excerpt?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
       post.tags.some((tag) => tag.toLowerCase().includes(search.toLowerCase()))
     const matchesCategory = activeCategory === "全部" || post.category === activeCategory
     return matchesSearch && matchesCategory
   })
 
+  // 加载状态
+  if (loading && posts.length === 0) {
+    return (
+      <div>
+        <div className="relative mb-6">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
+          <Input
+            placeholder="搜索文章标题、标签..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-11 pr-10 bg-card/40 border-border/50 focus:border-primary/40 h-12 rounded-xl transition-all duration-300"
+            disabled
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-10">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="px-3.5 py-1.5 text-xs font-mono rounded-lg border bg-card/30 border-border/40 h-8 w-16 animate-pulse"></div>
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-xl border border-border/40 bg-card/30 p-6 animate-pulse">
+              <div className="h-6 bg-primary/10 rounded w-3/4 mb-3"></div>
+              <div className="h-4 bg-primary/10 rounded w-full mb-2"></div>
+              <div className="h-4 bg-primary/10 rounded w-2/3"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // 错误状态
+  if (error) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-muted-foreground/50 font-mono text-sm">
+          {"// 加载失败，请稍后重试"}
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-3 text-xs text-primary hover:text-primary/80 transition-colors"
+        >
+          刷新页面
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div>
+      {/* 搜索框 */}
       <div className="relative mb-6">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
         <Input
@@ -133,6 +152,7 @@ export function BlogList() {
         )}
       </div>
 
+      {/* 分类筛选 */}
       <div className="flex flex-wrap gap-2 mb-10">
         {categories.map((cat) => (
           <button
@@ -149,6 +169,14 @@ export function BlogList() {
         ))}
       </div>
 
+      {/* 加载指示器 */}
+      {loading && (
+        <div className="flex justify-center py-4">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
+      )}
+
+      {/* 文章列表 */}
       <div className="flex flex-col gap-3">
         {filteredPosts.map((post) => (
           <Link key={post.slug} href={`/blog/${post.slug}`} className="group">
@@ -159,21 +187,21 @@ export function BlogList() {
                     {post.title}
                   </h3>
                   <p className="text-sm text-muted-foreground/70 leading-relaxed line-clamp-2">
-                    {post.excerpt}
+                    {post.excerpt || post.content.substring(0, 100) + '...'}
                   </p>
                 </div>
                 <span className="text-xs text-muted-foreground/40 font-mono whitespace-nowrap sm:ml-6 sm:mt-1">
-                  {post.date}
+                  {formatDate(post.createdAt)}
                 </span>
               </div>
               <div className="mt-4 flex items-center gap-4 flex-wrap">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
                   <Clock className="h-3 w-3" />
-                  {post.readTime}
+                  {calculateReadTime(post.content)}
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
                   <Eye className="h-3 w-3" />
-                  {post.views}
+                  {formatViews(post.views)}
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
                   <Heart className="h-3 w-3" />
@@ -191,7 +219,7 @@ export function BlogList() {
           </Link>
         ))}
 
-        {filteredPosts.length === 0 && (
+        {filteredPosts.length === 0 && !loading && (
           <div className="text-center py-20">
             <p className="text-muted-foreground/50 font-mono text-sm">
               {"// 没有找到匹配的文章"}
