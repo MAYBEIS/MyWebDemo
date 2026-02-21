@@ -97,8 +97,8 @@ function CommentItem({
 }) {
   const [showReplyInput, setShowReplyInput] = useState(false)
   const [replyText, setReplyText] = useState("")
-  // 默认展开的回复深度
-  const [showReplies, setShowReplies] = useState(depth < maxDepth)
+  // 默认展开所有回复
+  const [showReplies, setShowReplies] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [editText, setEditText] = useState(comment.content)
   const [isSaving, setIsSaving] = useState(false)
