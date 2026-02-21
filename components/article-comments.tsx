@@ -56,6 +56,24 @@ interface ArticleCommentsProps {
   postId: string
 }
 
+interface CommentResponse {
+  id: string
+  content: string
+  createdAt: Date
+  author: Author
+  replies: Comment[]
+}
+
+interface ApiResponse {
+  success: boolean
+  data: CommentResponse[]
+  total: number
+  page: number
+  limit: number
+  maxDepth: number
+  hasHiddenComments: boolean
+}
+
 function CommentItem({
   comment,
   depth,
@@ -269,14 +287,9 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
   const [loading, setLoading] = useState(true)
   const [newComment, setNewComment] = useState("")
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set())
+  const [maxDepth, setMaxDepth] = useState(3)
+  const [hasHiddenComments, setHasHiddenComments] = useState(false)
   const { user, isLoggedIn } = useAuth()
-
-  // 从环境变量获取评论最大深度配置
-  const maxReplyDepth = useMemo(() => {
-    const envDepth = process.env.NEXT_PUBLIC_COMMENT_MAX_DEPTH
-    const depth = parseInt(envDepth || "3", 10)
-    return isNaN(depth) ? 3 : Math.min(Math.max(depth, 1), 5)
-  }, [])
 
   // 加载评论
   useEffect(() => {
@@ -287,9 +300,12 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
     try {
       setLoading(true)
       const response = await fetch(`/api/comments?postId=${postId}`)
-      const result = await response.json()
+      const result = await response.json() as ApiResponse
       if (result.success) {
         setComments(result.data)
+        // 从 API 获取最大深度设置
+        setMaxDepth(result.maxDepth || 3)
+        setHasHiddenComments(result.hasHiddenComments || false)
       }
     } catch (error) {
       console.error("加载评论失败:", error)
@@ -435,7 +451,7 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
   return (
     <section className="mt-20">
       <Separator className="mb-10 bg-border/30" />
-      <div className="flex items-center gap-2.5 mb-10">
+      <div className="flex items-center gap-2.5 mb-6">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 border border-primary/15">
           <MessageSquare className="h-4 w-4 text-primary" />
         </div>
@@ -443,6 +459,13 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
           评论区 <span className="text-muted-foreground/40 font-normal text-base ml-1">({totalCount(comments)})</span>
         </h2>
       </div>
+
+      {/* 有隐藏评论时显示提示 */}
+      {hasHiddenComments && (
+        <div className="mb-6 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+          <p>部分评论因已达到回复深度上限而未显示。如需查看完整评论树，请联系管理员调整评论深度设置。</p>
+        </div>
+      )}
 
       {/* Comment form */}
       <div className="mb-10 rounded-xl border border-border/40 bg-card/30 p-6">
@@ -509,7 +532,7 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
               onDelete={handleDelete}
               onEdit={handleEdit}
               currentUserId={user?.id}
-              maxDepth={maxReplyDepth}
+              maxDepth={maxDepth}
             />
           ))}
         </div>
