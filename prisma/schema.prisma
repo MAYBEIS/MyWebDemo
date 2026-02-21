@@ -220,3 +220,18 @@ model user_memberships {
   @@index([active])
   @@index([endDate])
 }
+
+// 支付渠道
+model payment_channels {
+  id          String   @id
+  code        String   @unique  // 渠道代码: wechat, alipay
+  name        String            // 渠道名称
+  description String?           // 渠道描述
+  enabled     Boolean  @default(false)  // 是否启用
+  config      String            // 配置JSON字符串
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([code])
+  @@index([enabled])
+}

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth-service'
 import {
   getWechatPayConfig,
+  getWechatPayConfigFromDB,
   unifiedOrder,
   orderQuery,
   yuanToFen,
@@ -36,11 +37,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 获取微信支付配置
-    const config = getWechatPayConfig()
+    // 优先从数据库获取配置，其次从环境变量获取
+    let config = await getWechatPayConfigFromDB()
+    if (!config) {
+      config = getWechatPayConfig()
+    }
+    
     if (!config) {
       return NextResponse.json(
-        { success: false, error: '微信支付未配置' },
+        { success: false, error: '微信支付未配置，请在后台配置支付渠道' },
         { status: 500 }
       )
     }

@@ -4,6 +4,7 @@
  */
 
 import crypto from 'crypto'
+import { prisma } from '@/lib/prisma'
 
 // 微信支付配置类型
 export interface WechatPayConfig {
@@ -73,7 +74,49 @@ export interface PayNotifyData {
 }
 
 /**
- * 获取微信支付配置
+ * 从数据库获取微信支付配置
+ */
+export async function getWechatPayConfigFromDB(): Promise<WechatPayConfig | null> {
+  try {
+    const channel = await prisma.payment_channels.findFirst({
+      where: {
+        code: 'wechat',
+        enabled: true
+      }
+    })
+
+    if (!channel) {
+      console.warn('微信支付渠道未启用或不存在')
+      return null
+    }
+
+    const config = typeof channel.config === 'string' 
+      ? JSON.parse(channel.config) 
+      : channel.config
+
+    // 检查必要配置
+    if (!config.appId || !config.mchId || !config.apiKey || !config.notifyUrl) {
+      console.warn('微信支付配置不完整')
+      return null
+    }
+
+    return {
+      appId: config.appId,
+      mchId: config.mchId,
+      apiKey: config.apiKey,
+      apiV3Key: config.apiV3Key,
+      serialNo: config.serialNo,
+      privateKey: config.privateKey,
+      notifyUrl: config.notifyUrl
+    }
+  } catch (error) {
+    console.error('获取微信支付配置失败:', error)
+    return null
+  }
+}
+
+/**
+ * 获取微信支付配置（优先从数据库获取，其次从环境变量）
  */
 export function getWechatPayConfig(): WechatPayConfig | null {
   const appId = process.env.WECHAT_PAY_APP_ID
@@ -82,7 +125,7 @@ export function getWechatPayConfig(): WechatPayConfig | null {
   const notifyUrl = process.env.WECHAT_PAY_NOTIFY_URL
 
   if (!appId || !mchId || !apiKey || !notifyUrl) {
-    console.warn('微信支付配置不完整，请检查环境变量')
+    console.warn('微信支付配置不完整，请检查环境变量或数据库配置')
     return null
   }
 

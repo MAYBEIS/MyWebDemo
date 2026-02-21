@@ -4,14 +4,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ProductsShopManager } from '@/components/products-shop-manager'
 import { ProductKeysManager } from '@/components/product-keys-manager'
 import { OrdersManager } from '@/components/orders-manager'
-import { Package, Key, ShoppingCart } from 'lucide-react'
+import { PaymentChannelManager } from '@/components/payment-channel-manager'
+import { Package, Key, ShoppingCart, CreditCard } from 'lucide-react'
 
 export default function AdminShopPage() {
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div>
         <h1 className="text-3xl font-bold">商店管理</h1>
-        <p className="text-muted-foreground">管理产品、密钥和订单</p>
+        <p className="text-muted-foreground">管理产品、密钥、订单和支付渠道</p>
       </div>
 
       <Tabs defaultValue="products" className="space-y-4">
@@ -28,6 +29,10 @@ export default function AdminShopPage() {
             <ShoppingCart className="h-4 w-4" />
             订单管理
           </TabsTrigger>
+          <TabsTrigger value="payment" className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4" />
+            支付渠道
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="products">
@@ -40,6 +45,10 @@ export default function AdminShopPage() {
 
         <TabsContent value="orders">
           <OrdersManager />
+        </TabsContent>
+
+        <TabsContent value="payment">
+          <PaymentChannelManager />
         </TabsContent>
       </Tabs>
     </div>
