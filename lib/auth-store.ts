@@ -53,13 +53,16 @@ function getSnapshot() {
   return state
 }
 
+// 服务端默认状态（稳定的对象引用）
+const EMPTY_AUTH_STATE = {
+  user: null,
+  isLoggedIn: false,
+  isLoading: true,
+}
+
 // 获取服务端快照（用于 SSR）
 function getServerSnapshot() {
-  return {
-    user: null,
-    isLoggedIn: false,
-    isLoading: true,
-  }
+  return EMPTY_AUTH_STATE
 }
 
 /**
