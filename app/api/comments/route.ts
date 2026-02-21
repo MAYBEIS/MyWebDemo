@@ -20,11 +20,18 @@ export async function GET(request: NextRequest) {
       where.parentId = null // 只获取顶级评论
     }
 
-    // 获取评论最大深度设置 (使用 any 类型绕过类型检查)
-    const maxDepthSetting = await (prisma as any).system_settings.findUnique({
-      where: { key: 'comment_max_depth' }
-    })
-    const maxDepth = maxDepthSetting ? parseInt(maxDepthSetting.value, 10) : 3
+    // 获取评论最大深度设置 (添加错误处理)
+    let maxDepth = 3
+    try {
+      const maxDepthSetting = await (prisma as any).system_settings.findUnique({
+        where: { key: 'comment_max_depth' }
+      })
+      if (maxDepthSetting && maxDepthSetting.value) {
+        maxDepth = parseInt(maxDepthSetting.value, 10) || 3
+      }
+    } catch (e) {
+      console.warn('获取评论深度设置失败，使用默认值:', e)
+    }
 
     // 始终获取三级以支持动态深度
     const comments = await prisma.comments.findMany({
@@ -58,45 +65,8 @@ export async function GET(request: NextRequest) {
     const total = await prisma.comments.count({ where })
 
     // 简化检测：仅当 maxDepth < 3 时检查是否有隐藏评论
-    let hasHiddenComments = false
-    if (maxDepth < 3) {
-      // 检查二级评论是否有更深层的回复
-      for (const c of comments) {
-        if (c.other_comments && c.other_comments.length > 0) {
-          for (const r of c.other_comments) {
-            const deeperCount = await prisma.comments.count({
-              where: { parentId: r.id }
-            })
-            if (deeperCount > 0) {
-              hasHiddenComments = true
-              break
-            }
-          }
-        }
-        if (hasHiddenComments) break
-      }
-    } else if (maxDepth === 3) {
-      // 检查三级评论是否有更深层的回复
-      for (const c of comments) {
-        if (c.other_comments && c.other_comments.length > 0) {
-          for (const r of c.other_comments) {
-            if (r.other_comments && r.other_comments.length > 0) {
-              for (const rr of r.other_comments) {
-                const deeperCount = await prisma.comments.count({
-                  where: { parentId: rr.id }
-                })
-                if (deeperCount > 0) {
-                  hasHiddenComments = true
-                  break
-                }
-              }
-            }
-            if (hasHiddenComments) break
-          }
-        }
-        if (hasHiddenComments) break
-      }
-    }
+    // 为了性能，不进行深度检测，仅根据 maxDepth 设置判断
+    const hasHiddenComments = maxDepth < 3
 
     return NextResponse.json({
       success: true,

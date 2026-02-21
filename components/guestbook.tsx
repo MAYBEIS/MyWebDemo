@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Send, Heart, Trash2, LogIn } from "lucide-react"
+import { Send, Heart, Trash2, LogIn, ChevronDown, Loader2 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -53,28 +53,51 @@ interface GuestbookEntry {
 export function Guestbook() {
   const [messages, setMessages] = useState<GuestbookEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [newMessage, setNewMessage] = useState("")
   const [likedMessages, setLikedMessages] = useState<Set<string>>(new Set())
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalMessages, setTotalMessages] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
   const { user, isLoggedIn } = useAuth()
+  const MESSAGES_PER_PAGE = 15
 
   // 加载留言
   useEffect(() => {
-    loadMessages()
+    loadMessages(1)
   }, [])
 
-  const loadMessages = async () => {
+  const loadMessages = async (page: number = 1) => {
     try {
-      setLoading(true)
-      const response = await fetch("/api/guestbook")
+      if (page === 1) {
+        setLoading(true)
+      } else {
+        setLoadingMore(true)
+      }
+      const response = await fetch(`/api/guestbook?page=${page}&limit=${MESSAGES_PER_PAGE}`)
       const result = await response.json()
       if (result.success) {
-        setMessages(result.data.entries)
+        if (page === 1) {
+          setMessages(result.data.entries)
+        } else {
+          setMessages(prev => [...prev, ...result.data.entries])
+        }
+        setTotalMessages(result.data.total || 0)
+        setHasMore(result.data.entries.length === MESSAGES_PER_PAGE)
+        setCurrentPage(page)
       }
     } catch (error) {
       console.error("加载留言失败:", error)
       toast.error("加载留言失败")
     } finally {
       setLoading(false)
+      setLoadingMore(false)
+    }
+  }
+
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore) {
+      loadMessages(currentPage + 1)
     }
   }
 
@@ -100,7 +123,7 @@ export function Guestbook() {
       if (result.success) {
         setNewMessage("")
         toast.success("留言成功！")
-        loadMessages()
+        loadMessages(1)
       } else {
         toast.error(result.error || "留言失败")
       }
@@ -132,7 +155,7 @@ export function Guestbook() {
       const result = await response.json()
       if (result.success) {
         toast.success("留言已删除")
-        loadMessages()
+        loadMessages(1)
       } else {
         toast.error(result.error || "删除留言失败")
       }
@@ -196,7 +219,7 @@ export function Guestbook() {
       {/* Messages count */}
       <div className="flex items-center justify-between mb-6">
         <p className="text-sm text-muted-foreground/40 font-mono">
-          共 {messages.length} 条留言
+          共 {totalMessages > 0 ? totalMessages : messages.length} 条留言
         </p>
       </div>
 
@@ -210,71 +233,96 @@ export function Guestbook() {
           <p className="text-sm text-muted-foreground/40">暂无留言，快来留下第一条留言吧！</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`group rounded-xl border p-5 transition-all duration-300 ${
-                msg.author.isAdmin
-                  ? "border-primary/15 bg-primary/[0.03] hover:bg-primary/[0.06]"
-                  : "border-border/30 bg-card/20 hover:bg-card/40 hover:border-border/50"
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <Avatar className="h-9 w-9 border border-border/40 shrink-0">
-                  <AvatarFallback
-                    className={`text-xs font-mono ${
-                      msg.author.isAdmin
-                        ? "bg-primary/15 text-primary"
-                        : "bg-secondary/50 text-muted-foreground/60"
-                    }`}
-                  >
-                    {msg.author.avatar}
-                  </AvatarFallback>
-                </Avatar>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className={`text-sm font-medium ${msg.author.isAdmin ? "text-primary" : "text-foreground/90"}`}>
-                      {msg.author.name}
-                    </span>
-                    {msg.author.isAdmin && (
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/15">
-                        作者
-                      </span>
-                    )}
-                    <span className="text-xs text-muted-foreground/30">{formatTime(msg.createdAt)}</span>
-                  </div>
-                  <p className="text-sm text-foreground/65 leading-relaxed">
-                    {msg.message}
-                  </p>
-                  <div className="flex items-center gap-3 mt-3">
-                    <button
-                      onClick={() => handleLike(msg.id)}
-                      className={`flex items-center gap-1.5 text-xs transition-colors duration-300 ${
-                        likedMessages.has(msg.id)
-                          ? "text-destructive"
-                          : "text-muted-foreground/30 hover:text-destructive"
+        <>
+          <div className="flex flex-col gap-3">
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`group rounded-xl border p-5 transition-all duration-300 ${
+                  msg.author.isAdmin
+                    ? "border-primary/15 bg-primary/[0.03] hover:bg-primary/[0.06]"
+                    : "border-border/30 bg-card/20 hover:bg-card/40 hover:border-border/50"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <Avatar className="h-9 w-9 border border-border/40 shrink-0">
+                    <AvatarFallback
+                      className={`text-xs font-mono ${
+                        msg.author.isAdmin
+                          ? "bg-primary/15 text-primary"
+                          : "bg-secondary/50 text-muted-foreground/60"
                       }`}
                     >
-                      <Heart className={`h-3.5 w-3.5 ${likedMessages.has(msg.id) ? "fill-current" : ""}`} />
-                      点赞
-                    </button>
-                    {isLoggedIn && user && (user.isAdmin || msg.author.id === user.id) && (
+                      {msg.author.avatar}
+                    </AvatarFallback>
+                  </Avatar>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={`text-sm font-medium ${msg.author.isAdmin ? "text-primary" : "text-foreground/90"}`}>
+                        {msg.author.name}
+                      </span>
+                      {msg.author.isAdmin && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/15">
+                          作者
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground/30">{formatTime(msg.createdAt)}</span>
+                    </div>
+                    <p className="text-sm text-foreground/65 leading-relaxed">
+                      {msg.message}
+                    </p>
+                    <div className="flex items-center gap-3 mt-3">
                       <button
-                        onClick={() => handleDelete(msg.id)}
-                        className="flex items-center gap-1.5 text-xs text-muted-foreground/20 hover:text-destructive transition-colors duration-300 opacity-0 group-hover:opacity-100"
+                        onClick={() => handleLike(msg.id)}
+                        className={`flex items-center gap-1.5 text-xs transition-colors duration-300 ${
+                          likedMessages.has(msg.id)
+                            ? "text-destructive"
+                            : "text-muted-foreground/30 hover:text-destructive"
+                        }`}
                       >
-                        <Trash2 className="h-3 w-3" />
-                        删除
+                        <Heart className={`h-3.5 w-3.5 ${likedMessages.has(msg.id) ? "fill-current" : ""}`} />
+                        点赞
                       </button>
-                    )}
+                      {isLoggedIn && user && (user.isAdmin || msg.author.id === user.id) && (
+                        <button
+                          onClick={() => handleDelete(msg.id)}
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground/20 hover:text-destructive transition-colors duration-300 opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          删除
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
+            ))}
+          </div>
+          {/* 加载更多按钮 */}
+          {hasMore && (
+            <div className="flex justify-center mt-8">
+              <Button
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                variant="outline"
+                className="border-border/40 gap-2"
+              >
+                {loadingMore ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    加载中...
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    加载更多
+                  </>
+                )}
+              </Button>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   )

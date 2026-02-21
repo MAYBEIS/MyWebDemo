@@ -285,33 +285,56 @@ function CommentItem({
 export function ArticleComments({ postId }: ArticleCommentsProps) {
   const [comments, setComments] = useState<Comment[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [newComment, setNewComment] = useState("")
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set())
   const [maxDepth, setMaxDepth] = useState(3)
   const [hasHiddenComments, setHasHiddenComments] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalComments, setTotalComments] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
   const { user, isLoggedIn } = useAuth()
+  const COMMENTS_PER_PAGE = 10
 
   // 加载评论
   useEffect(() => {
-    loadComments()
+    loadComments(1)
   }, [postId])
 
-  const loadComments = async () => {
+  const loadComments = async (page: number = 1) => {
     try {
-      setLoading(true)
-      const response = await fetch(`/api/comments?postId=${postId}`)
+      if (page === 1) {
+        setLoading(true)
+      } else {
+        setLoadingMore(true)
+      }
+      const response = await fetch(`/api/comments?postId=${postId}&page=${page}&limit=${COMMENTS_PER_PAGE}`)
       const result = await response.json() as ApiResponse
       if (result.success) {
-        setComments(result.data)
+        if (page === 1) {
+          setComments(result.data)
+        } else {
+          setComments(prev => [...prev, ...result.data])
+        }
         // 从 API 获取最大深度设置
         setMaxDepth(result.maxDepth || 3)
         setHasHiddenComments(result.hasHiddenComments || false)
+        setTotalComments(result.total || 0)
+        setHasMore(result.data.length === COMMENTS_PER_PAGE)
+        setCurrentPage(page)
       }
     } catch (error) {
       console.error("加载评论失败:", error)
       toast.error("加载评论失败")
     } finally {
       setLoading(false)
+      setLoadingMore(false)
+    }
+  }
+
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore) {
+      loadComments(currentPage + 1)
     }
   }
 
@@ -338,7 +361,7 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
       if (result.success) {
         setNewComment("")
         toast.success("评论发表成功！")
-        loadComments()
+        loadComments(1)
       } else {
         toast.error(result.error || "发表评论失败")
       }
@@ -391,7 +414,7 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
       
       if (result.success) {
         toast.success("回复成功！")
-        loadComments()
+        loadComments(1)
       } else {
         toast.error(result.error || "回复失败")
       }
@@ -411,7 +434,7 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
       const result = await response.json()
       if (result.success) {
         toast.success("评论已删除")
-        loadComments()
+        loadComments(1)
       } else {
         toast.error(result.error || "删除评论失败")
       }
@@ -432,7 +455,7 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
       const result = await response.json()
       if (result.success) {
         toast.success('评论已更新')
-        loadComments()
+        loadComments(1)
       } else {
         toast.error(result.error || '修改评论失败')
       }
@@ -456,7 +479,7 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
           <MessageSquare className="h-4 w-4 text-primary" />
         </div>
         <h2 className="text-xl font-bold text-foreground">
-          评论区 <span className="text-muted-foreground/40 font-normal text-base ml-1">({totalCount(comments)})</span>
+          评论区 <span className="text-muted-foreground/40 font-normal text-base ml-1">({totalComments > 0 ? `${totalComments} 条评论` : `${totalCount(comments)} 条评论`})</span>
         </h2>
       </div>
 
@@ -520,22 +543,47 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
           <p className="text-sm text-muted-foreground/40">暂无评论，快来发表第一条评论吧！</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
-          {comments.map((comment) => (
-            <CommentItem
-              key={comment.id}
-              comment={comment}
-              depth={0}
-              likedSet={likedComments}
-              onLike={handleLike}
-              onReply={handleReply}
-              onDelete={handleDelete}
-              onEdit={handleEdit}
-              currentUserId={user?.id}
-              maxDepth={maxDepth}
-            />
-          ))}
-        </div>
+        <>
+          <div className="flex flex-col gap-4">
+            {comments.map((comment) => (
+              <CommentItem
+                key={comment.id}
+                comment={comment}
+                depth={0}
+                likedSet={likedComments}
+                onLike={handleLike}
+                onReply={handleReply}
+                onDelete={handleDelete}
+                onEdit={handleEdit}
+                currentUserId={user?.id}
+                maxDepth={maxDepth}
+              />
+            ))}
+          </div>
+          {/* 加载更多按钮 */}
+          {hasMore && (
+            <div className="flex justify-center mt-8">
+              <Button
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                variant="outline"
+                className="border-border/40 gap-2"
+              >
+                {loadingMore ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    加载中...
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    加载更多评论
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </section>
   )
