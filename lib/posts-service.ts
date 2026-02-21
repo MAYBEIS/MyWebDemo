@@ -339,6 +339,154 @@ export async function incrementLikes(slug: string): Promise<void> {
 }
 
 /**
+ * 切换文章点赞状态
+ * @returns { liked: boolean, likes: number } - 返回新的点赞状态和总点赞数
+ */
+export async function toggleLike(slug: string, userId: string): Promise<{ liked: boolean; likes: number }> {
+  // 先获取文章
+  const post = await prisma.posts.findUnique({
+    where: { slug },
+    select: { id: true, likes: true }
+  })
+
+  if (!post) {
+    throw new Error('文章不存在')
+  }
+
+  // 检查用户是否已点赞
+  const existingLike = await prisma.post_likes.findUnique({
+    where: {
+      postId_userId: {
+        postId: post.id,
+        userId
+      }
+    }
+  })
+
+  if (existingLike) {
+    // 已点赞，取消点赞
+    await prisma.post_likes.delete({
+      where: { id: existingLike.id }
+    })
+    // 减少点赞数
+    await prisma.posts.update({
+      where: { slug },
+      data: { likes: { decrement: 1 } }
+    })
+    
+    const updatedPost = await prisma.posts.findUnique({
+      where: { slug },
+      select: { likes: true }
+    })
+    
+    return { liked: false, likes: updatedPost?.likes || 0 }
+  } else {
+    // 未点赞，添加点赞
+    await prisma.post_likes.create({
+      data: {
+        id: `like_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        postId: post.id,
+        userId
+      }
+    })
+    // 增加点赞数
+    await prisma.posts.update({
+      where: { slug },
+      data: { likes: { increment: 1 } }
+    })
+    
+    const updatedPost = await prisma.posts.findUnique({
+      where: { slug },
+      select: { likes: true }
+    })
+    
+    return { liked: true, likes: updatedPost?.likes || 0 }
+  }
+}
+
+/**
+ * 切换文章收藏状态
+ * @returns { bookmarked: boolean } - 返回新的收藏状态
+ */
+export async function toggleBookmark(slug: string, userId: string): Promise<{ bookmarked: boolean }> {
+  // 先获取文章
+  const post = await prisma.posts.findUnique({
+    where: { slug },
+    select: { id: true }
+  })
+
+  if (!post) {
+    throw new Error('文章不存在')
+  }
+
+  // 检查用户是否已收藏
+  const existingBookmark = await prisma.post_bookmarks.findUnique({
+    where: {
+      postId_userId: {
+        postId: post.id,
+        userId
+      }
+    }
+  })
+
+  if (existingBookmark) {
+    // 已收藏，取消收藏
+    await prisma.post_bookmarks.delete({
+      where: { id: existingBookmark.id }
+    })
+    return { bookmarked: false }
+  } else {
+    // 未收藏，添加收藏
+    await prisma.post_bookmarks.create({
+      data: {
+        id: `bookmark_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        postId: post.id,
+        userId
+      }
+    })
+    return { bookmarked: true }
+  }
+}
+
+/**
+ * 获取用户对文章的互动状态（点赞和收藏）
+ */
+export async function getPostInteractionStatus(slug: string, userId: string): Promise<{ liked: boolean; bookmarked: boolean }> {
+  const post = await prisma.posts.findUnique({
+    where: { slug },
+    select: { id: true }
+  })
+
+  if (!post) {
+    return { liked: false, bookmarked: false }
+  }
+
+  const [likeRecord, bookmarkRecord] = await Promise.all([
+    prisma.post_likes.findUnique({
+      where: {
+        postId_userId: {
+          postId: post.id,
+          userId
+        }
+      }
+    }),
+    prisma.post_bookmarks.findUnique({
+      where: {
+        postId_userId: {
+          postId: post.id,
+          userId
+        }
+      }
+    })
+  ])
+
+  return {
+    liked: !!likeRecord,
+    bookmarked: !!bookmarkRecord
+  }
+}
+
+/**
  * 获取所有分类
  */
 export async function getCategories(): Promise<string[]> {

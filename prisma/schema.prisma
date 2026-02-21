@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model comments {
+  id             String     @id
+  content        String
+  postId         String
+  authorId       String
+  parentId       String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime
+  comments       comments?  @relation("commentsTocomments", fields: [parentId], references: [id], onDelete: Cascade)
+  other_comments comments[] @relation("commentsTocomments")
+  users          users      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  posts          posts      @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([authorId])
+  @@index([postId])
+}
+
+model guestbooks {
+  id        String   @id
+  message   String
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  users     users    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+}
+
+model post_tags {
+  id     String @id
+  postId String
+  tag    String
+  posts  posts  @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, tag])
+  @@index([tag])
+}
+
+model posts {
+  id             String          @id
+  slug           String          @unique
+  title          String
+  content        String
+  excerpt        String?
+  category       String?
+  coverImage     String?
+  published      Boolean         @default(false)
+  views          Int             @default(0)
+  likes          Int             @default(0)
+  authorId       String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime
+  comments       comments[]
+  post_tags      post_tags[]
+  users          users           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  post_likes     post_likes[]
+  post_bookmarks post_bookmarks[]
+
+  @@index([createdAt])
+  @@index([published])
+  @@index([category])
+}
+
+model sessions {
+  id        String   @id
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+model users {
+  id         String        @id
+  email      String        @unique
+  name       String
+  password   String
+  isAdmin    Boolean       @default(false)
+  avatar     String?
+  bio        String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime
+  comments   comments[]
+  guestbooks guestbooks[]
+  posts      posts[]
+  post_likes post_likes[]
+  post_bookmarks post_bookmarks[]
+}
+
+// 用户对文章的点赞记录
+model post_likes {
+  id        String   @id
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  posts     posts    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])  // 同一用户只能点赞一次
+  @@index([postId])
+  @@index([userId])
+}
+
+// 用户对文章的收藏记录
+model post_bookmarks {
+  id        String   @id
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  posts     posts    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])  // 同一用户只能收藏一次
+  @@index([postId])
+  @@index([userId])
+}

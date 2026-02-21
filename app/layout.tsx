@@ -10,23 +10,6 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'SysLog | 系统程序员 & 技术写作者',
   description: '个人博客与作品集，展示系统编程专长、深度技术文章和开源贡献。',
-  icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
-  },
 }
 
 export const viewport: Viewport = {

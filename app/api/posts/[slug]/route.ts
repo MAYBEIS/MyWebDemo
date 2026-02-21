@@ -4,7 +4,9 @@ import {
   updatePost,
   deletePost,
   incrementViews,
-  incrementLikes,
+  toggleLike,
+  toggleBookmark,
+  getPostInteractionStatus,
 } from '@/lib/posts-service'
 import { getCurrentUser } from '@/lib/auth-service'
 
@@ -32,9 +34,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Increment view count
     await incrementViews(slug)
 
+    // 获取当前用户的互动状态
+    const user = await getCurrentUser(request)
+    let interactionStatus = { liked: false, bookmarked: false }
+    
+    if (user) {
+      interactionStatus = await getPostInteractionStatus(slug, user.id)
+    }
+
     return NextResponse.json({
       success: true,
-      data: post,
+      data: {
+        ...post,
+        liked: interactionStatus.liked,
+        bookmarked: interactionStatus.bookmarked,
+      },
     })
   } catch (error) {
     console.error('GET /api/posts/[slug] error:', error)
@@ -145,23 +159,39 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
 /**
  * PATCH /api/posts/[slug]
- * Partial update (e.g., like a post)
- * Request body: { action: 'like' }
- * Response: { success: boolean, data: { likes: number } }
+ * Partial update (like/bookmark actions)
+ * Request body: { action: 'like' | 'bookmark' }
+ * Response: { success: boolean, data: { liked: boolean, likes: number } } or { success: boolean, data: { bookmarked: boolean } }
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const { slug } = await params
+    
+    // 验证用户认证
+    const user = await getCurrentUser(request)
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: '请先登录' },
+        { status: 401 }
+      )
+    }
+    
     const body = await request.json()
     const { action } = body
 
     if (action === 'like') {
-      await incrementLikes(slug)
-      const post = await getPostBySlug(slug)
-
+      const result = await toggleLike(slug, user.id)
       return NextResponse.json({
         success: true,
-        data: { likes: post?.likes || 0 },
+        data: result,
+      })
+    }
+
+    if (action === 'bookmark') {
+      const result = await toggleBookmark(slug, user.id)
+      return NextResponse.json({
+        success: true,
+        data: result,
       })
     }
 
