@@ -30,6 +30,14 @@ export async function GET(request: NextRequest) {
           include: {
             users: {
               select: { id: true, name: true, avatar: true, isAdmin: true }
+            },
+            other_comments: {
+              include: {
+                users: {
+                  select: { id: true, name: true, avatar: true, isAdmin: true }
+                }
+              },
+              orderBy: { createdAt: 'asc' }
             }
           },
           orderBy: { createdAt: 'asc' }
@@ -64,6 +72,18 @@ export async function GET(request: NextRequest) {
             avatar: r.users.avatar,
             isAdmin: r.users.isAdmin,
           },
+          replies: r.other_comments?.map((rr: typeof r.other_comments[0]) => ({
+            id: rr.id,
+            content: rr.content,
+            createdAt: rr.createdAt,
+            author: {
+              id: rr.users.id,
+              name: rr.users.name,
+              avatar: rr.users.avatar,
+              isAdmin: rr.users.isAdmin,
+            },
+            replies: [],
+          })) || [],
         })),
       })),
       total,
