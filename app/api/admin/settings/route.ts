@@ -4,14 +4,63 @@ import prisma from '@/lib/prisma'
 
 // 默认设置
 const DEFAULT_SETTINGS = {
+  // 博客基本设置
+  site_title: {
+    value: 'SysLog',
+    description: '网站标题',
+  },
+  site_description: {
+    value: '一个现代化的技术博客',
+    description: '网站描述',
+  },
+  site_keywords: {
+    value: '博客,技术,编程',
+    description: '网站关键字（用逗号分隔）',
+  },
+  site_logo: {
+    value: '',
+    description: '网站 Logo URL',
+  },
+  // 社交链接
+  github_url: {
+    value: '',
+    description: 'GitHub 个人主页链接',
+  },
+  twitter_url: {
+    value: '',
+    description: 'Twitter/X 链接',
+  },
+  weibo_url: {
+    value: '',
+    description: '微博链接',
+  },
+  // 评论设置
   comment_max_depth: {
     value: '3',
     description: '评论最大回复深度 (1-5)',
+  },
+  comment_filter_words: {
+    value: '',
+    description: '敏感词过滤（用逗号分隔）',
+  },
+  comment_captcha_enabled: {
+    value: 'false',
+    description: '是否启用评论验证码',
   },
   image_host_provider: {
     value: 'local',
     description: '图床 provider (local/smms/imgbb/github)',
   },
+  // 分页设置
+  posts_per_page: {
+    value: '10',
+    description: '每页显示文章数量',
+  },
+  comments_per_page: {
+    value: '20',
+    description: '每页显示评论数量',
+  },
+  // 用户设置
   allow_registration: {
     value: 'true',
     description: '是否允许用户注册',
@@ -107,6 +156,17 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // 验证分页设置
+    if (key === 'posts_per_page' || key === 'comments_per_page') {
+      const num = parseInt(value, 10)
+      if (isNaN(num) || num < 1 || num > 100) {
+        return NextResponse.json(
+          { success: false, error: `${key === 'posts_per_page' ? '每页文章' : '每页评论'}数量必须是 1-100 之间的数字` },
+          { status: 400 }
+        )
+      }
+    }
+
     // 更新或创建设置
     const setting = await prisma.system_settings.upsert({
       where: { key },
@@ -115,7 +175,7 @@ export async function PUT(request: NextRequest) {
         updatedAt: new Date(),
       },
       create: {
-        id: `setting_${Date.now()}`,
+        id: `setting_${key}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         key,
         value: String(value),
         description: DEFAULT_SETTINGS[key as keyof typeof DEFAULT_SETTINGS]?.description || '',

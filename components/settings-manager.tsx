@@ -1,11 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Settings, Save, RotateCcw, Image, MessageSquare, Users, Check, AlertCircle } from "lucide-react"
+import { Settings, Save, RotateCcw, Image, MessageSquare, Users, Check, AlertCircle, Globe, Search, Shield, Link, Layers } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 
 interface SettingsManagerProps {
@@ -98,6 +99,127 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
         </div>
       </div>
 
+      {/* 博客基本设置 */}
+      <div className="rounded-xl border border-border/40 bg-card/30 p-6 mb-6">
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+          <Globe className="h-5 w-5 text-primary" />
+          博客基本设置
+        </h2>
+        
+        <div className="grid gap-6">
+          <div className="grid gap-2">
+            <Label htmlFor="site_title">网站标题</Label>
+            <Input
+              id="site_title"
+              value={settings.site_title?.value || ''}
+              onChange={(e) => updateSetting('site_title', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md"
+              placeholder="SysLog"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.site_title?.description || '网站标题'}
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="site_description">网站描述</Label>
+            <Textarea
+              id="site_description"
+              value={settings.site_description?.value || ''}
+              onChange={(e) => updateSetting('site_description', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md min-h-[80px]"
+              placeholder="一个现代化的技术博客"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.site_description?.description || '网站描述'}
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="site_keywords">网站关键字</Label>
+            <Input
+              id="site_keywords"
+              value={settings.site_keywords?.value || ''}
+              onChange={(e) => updateSetting('site_keywords', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md"
+              placeholder="博客,技术,编程"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.site_keywords?.description || '网站关键字（用逗号分隔）'}
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="site_logo">网站 Logo</Label>
+            <Input
+              id="site_logo"
+              value={settings.site_logo?.value || ''}
+              onChange={(e) => updateSetting('site_logo', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md"
+              placeholder="https://example.com/logo.png"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.site_logo?.description || '网站 Logo URL'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 社交链接设置 */}
+      <div className="rounded-xl border border-border/40 bg-card/30 p-6 mb-6">
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+          <Link className="h-5 w-5 text-primary" />
+          社交链接
+        </h2>
+        
+        <div className="grid gap-6">
+          <div className="grid gap-2">
+            <Label htmlFor="github_url">GitHub</Label>
+            <Input
+              id="github_url"
+              type="url"
+              value={settings.github_url?.value || ''}
+              onChange={(e) => updateSetting('github_url', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md"
+              placeholder="https://github.com/username"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.github_url?.description || 'GitHub 个人主页链接'}
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="twitter_url">Twitter / X</Label>
+            <Input
+              id="twitter_url"
+              type="url"
+              value={settings.twitter_url?.value || ''}
+              onChange={(e) => updateSetting('twitter_url', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md"
+              placeholder="https://twitter.com/username"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.twitter_url?.description || 'Twitter/X 链接'}
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="weibo_url">微博</Label>
+            <Input
+              id="weibo_url"
+              type="url"
+              value={settings.weibo_url?.value || ''}
+              onChange={(e) => updateSetting('weibo_url', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md"
+              placeholder="https://weibo.com/username"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.weibo_url?.description || '微博链接'}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* 评论设置 */}
       <div className="rounded-xl border border-border/40 bg-card/30 p-6 mb-6">
         <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
@@ -122,6 +244,20 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
             </p>
           </div>
 
+          <div className="grid gap-2">
+            <Label htmlFor="comment_filter_words">敏感词过滤</Label>
+            <Textarea
+              id="comment_filter_words"
+              value={settings.comment_filter_words?.value || ''}
+              onChange={(e) => updateSetting('comment_filter_words', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md min-h-[80px]"
+              placeholder="敏感词1,敏感词2,敏感词3"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.comment_filter_words?.description || '敏感词过滤（用逗号分隔）'}
+            </p>
+          </div>
+
           <div className="flex items-center justify-between">
             <div>
               <Label htmlFor="moderation_enabled">评论审核</Label>
@@ -134,6 +270,62 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
               checked={settings.moderation_enabled?.value === 'true'}
               onCheckedChange={(checked) => updateSetting('moderation_enabled', checked ? 'true' : 'false')}
             />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="comment_captcha_enabled">评论验证码</Label>
+              <p className="text-xs text-muted-foreground/50 mt-1">
+                {settings.comment_captcha_enabled?.description || '是否启用评论验证码'}
+              </p>
+            </div>
+            <Switch
+              id="comment_captcha_enabled"
+              checked={settings.comment_captcha_enabled?.value === 'true'}
+              onCheckedChange={(checked) => updateSetting('comment_captcha_enabled', checked ? 'true' : 'false')}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 分页设置 */}
+      <div className="rounded-xl border border-border/40 bg-card/30 p-6 mb-6">
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+          <Layers className="h-5 w-5 text-primary" />
+          分页设置
+        </h2>
+        
+        <div className="grid gap-6">
+          <div className="grid gap-2">
+            <Label htmlFor="posts_per_page">每页文章数量</Label>
+            <Input
+              id="posts_per_page"
+              type="number"
+              min={1}
+              max={50}
+              value={settings.posts_per_page?.value || '10'}
+              onChange={(e) => updateSetting('posts_per_page', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-xs"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.posts_per_page?.description || '每页显示文章数量'}
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="comments_per_page">每页评论数量</Label>
+            <Input
+              id="comments_per_page"
+              type="number"
+              min={1}
+              max={100}
+              value={settings.comments_per_page?.value || '20'}
+              onChange={(e) => updateSetting('comments_per_page', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-xs"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.comments_per_page?.description || '每页显示评论数量'}
+            </p>
           </div>
         </div>
       </div>

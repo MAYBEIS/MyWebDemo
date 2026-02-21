@@ -128,9 +128,9 @@ model post_bookmarks {
 
 // 系统设置
 model system_settings {
-  id          String   @id @default("settings")
+  id          String   @id
   key         String   @unique
-  value      String
+  value       String
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
