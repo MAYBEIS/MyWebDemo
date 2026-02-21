@@ -94,7 +94,7 @@ export function PostsManager({ initialPosts }: PostsManagerProps) {
       category: post.category || "",
       coverImage: post.coverImage || "",
       published: post.published,
-      tags: post.tags.map(t => t.tag).join(", "),
+      tags: post.tags?.map(t => t.tag).join(", ") || "",
     })
     setIsDialogOpen(true)
   }

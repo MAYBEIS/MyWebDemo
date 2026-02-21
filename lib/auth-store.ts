@@ -261,13 +261,50 @@ export async function logout(): Promise<void> {
 /**
  * 更新用户资料
  */
-export function updateProfile(updates: Partial<User>) {
+export async function updateProfile(updates: Partial<User>) {
   if (!state.user) return
+
+  // 保存旧值用于回滚
+  const oldUser = { ...state.user }
+
+  // 先更新本地状态
   state = {
     ...state,
     user: { ...state.user, ...updates },
   }
   emitChange()
+
+  // 调用 API 保存到数据库
+  try {
+    const response = await fetch('/api/auth/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(updates),
+    })
+
+    const data = await response.json()
+    
+    if (!response.ok || !data.success) {
+      console.error('保存用户资料失败:', data.error)
+      // 回滚本地状态
+      state = {
+        ...state,
+        user: oldUser,
+      }
+      emitChange()
+      throw new Error(data.error || '保存失败')
+    }
+  } catch (error) {
+    console.error('更新用户资料失败:', error)
+    // 回滚本地状态
+    state = {
+      ...state,
+      user: oldUser,
+    }
+    emitChange()
+    throw error
+  }
 }
 
 /**

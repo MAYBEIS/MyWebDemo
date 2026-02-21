@@ -1,11 +1,20 @@
 "use client"
 
 import { useState } from "react"
-import { Search, Trash2, RefreshCw, MessageSquare, FileText } from "lucide-react"
+import { Search, Trash2, RefreshCw, MessageSquare, FileText, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { toast } from "sonner"
 import Link from "next/link"
 
@@ -71,9 +80,9 @@ export function CommentsManager({ initialComments }: CommentsManagerProps) {
 
   // 过滤评论
   const filteredComments = comments.filter(comment =>
-    comment.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    comment.author.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    comment.post.title.toLowerCase().includes(searchQuery.toLowerCase())
+    comment.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    comment.author?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    comment.post?.title?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   // 删除评论
@@ -115,6 +124,59 @@ export function CommentsManager({ initialComments }: CommentsManagerProps) {
       console.error("刷新评论列表失败:", error)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // 编辑评论
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editingComment, setEditingComment] = useState<Comment | null>(null)
+  const [editContent, setEditContent] = useState("")
+
+  const openEditDialog = (comment: Comment) => {
+    setEditingComment(comment)
+    setEditContent(comment.content)
+    setIsEditDialogOpen(true)
+  }
+
+  const handleEdit = async () => {
+    if (!editContent.trim()) {
+      toast.error("评论内容不能为空")
+      return
+    }
+
+    if (!editingComment) return
+
+    try {
+      const response = await fetch("/api/comments", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          id: editingComment.id,
+          content: editContent.trim(),
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "编辑失败")
+      }
+
+      toast.success("评论已更新")
+      setIsEditDialogOpen(false)
+      setEditingComment(null)
+      setEditContent("")
+      
+      // 更新本地列表
+      setComments(comments.map(c => 
+        c.id === editingComment.id 
+          ? { ...c, content: editContent.trim(), updatedAt: new Date().toISOString() }
+          : c
+      ))
+    } catch (error) {
+      console.error("编辑评论失败:", error)
+      toast.error(error instanceof Error ? error.message : "编辑失败")
     }
   }
 
@@ -182,12 +244,12 @@ export function CommentsManager({ initialComments }: CommentsManagerProps) {
                   <div className="flex items-center gap-2">
                     <Avatar className="h-6 w-6 border border-border/40">
                       <AvatarFallback className="bg-primary/10 text-primary text-[9px] font-mono">
-                        {getAvatarInitials(comment.author.name, comment.author.avatar)}
+                        {comment.author ? getAvatarInitials(comment.author.name, comment.author.avatar) : "?"}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-medium text-foreground">{comment.author.name}</span>
-                      {comment.author.isAdmin && (
+                      <span className="text-sm font-medium text-foreground">{comment.author?.name || "未知用户"}</span>
+                      {comment.author?.isAdmin && (
                         <Badge variant="default" className="bg-primary/10 text-primary border-primary/20 text-[10px] px-1.5 py-0">
                           管理员
                         </Badge>
@@ -197,11 +259,11 @@ export function CommentsManager({ initialComments }: CommentsManagerProps) {
                 </td>
                 <td className="px-4 py-3">
                   <Link
-                    href={`/blog/${comment.post.slug}`}
+                    href={`/blog/${comment.post?.slug || ""}`}
                     className="flex items-center gap-1.5 text-sm text-primary hover:underline"
                   >
                     <FileText className="h-3.5 w-3.5" />
-                    <span className="line-clamp-1 max-w-[150px]">{comment.post.title}</span>
+                    <span className="line-clamp-1 max-w-[150px]">{comment.post?.title || "未知文章"}</span>
                   </Link>
                 </td>
                 <td className="px-4 py-3">
@@ -225,6 +287,15 @@ export function CommentsManager({ initialComments }: CommentsManagerProps) {
                     <Button
                       variant="ghost"
                       size="sm"
+                      onClick={() => openEditDialog(comment)}
+                      className="h-8 w-8 p-0"
+                      title="编辑评论"
+                    >
+                      <Pencil className="h-4 w-4 text-muted-foreground/60" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleDelete(comment)}
                       className="h-8 w-8 p-0 hover:text-destructive"
                       title="删除评论"
@@ -245,6 +316,49 @@ export function CommentsManager({ initialComments }: CommentsManagerProps) {
           </tbody>
         </table>
       </div>
+
+      {/* 编辑评论对话框 */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>编辑评论</DialogTitle>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="editContent">评论内容</Label>
+              <Textarea
+                id="editContent"
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                placeholder="输入评论内容..."
+                className="bg-background/30 border-border/40 min-h-[120px]"
+              />
+            </div>
+            {editingComment && (
+              <div className="text-xs text-muted-foreground/50">
+                原评论：{editingComment.content.substring(0, 50)}{editingComment.content.length > 50 ? "..." : ""}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsEditDialogOpen(false)}
+              className="border-border/40"
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handleEdit}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -208,7 +208,7 @@ function CommentItem({
               编辑
             </button>
           )}
-          {comment.replies.length > 0 && (
+            {comment.replies && comment.replies.length > 0 && (
             <button
               onClick={() => setShowReplies(!showReplies)}
               className="flex items-center gap-1 text-xs text-muted-foreground/40 hover:text-primary transition-colors duration-300 ml-auto"
@@ -239,7 +239,7 @@ function CommentItem({
         )}
       </div>
 
-      {showReplies && comment.replies.length > 0 && (
+      {showReplies && comment.replies && comment.replies.length > 0 && (
         <div className="flex flex-col gap-3 mt-3">
           {comment.replies.map((reply) => (
             <CommentItem
@@ -400,8 +400,11 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
     }
   }
 
-  const totalCount = (items: Comment[]): number =>
-    items.reduce((sum, c) => sum + 1 + totalCount(c.replies), 0)
+  // 计算评论总数（包括回复）
+  const totalCount = (items: Comment[]): number => {
+    if (!items || !Array.isArray(items)) return 0
+    return items.reduce((sum, c) => sum + 1 + totalCount(c.replies || []), 0)
+  }
 
   return (
     <section className="mt-20">

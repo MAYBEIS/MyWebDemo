@@ -67,14 +67,18 @@ export function UserProfile() {
     setIsEditing(true)
   }
 
-  const saveProfile = () => {
+  const saveProfile = async () => {
     if (!editName.trim()) {
       toast.error("用户名不能为空")
       return
     }
-    updateProfile({ name: editName, bio: editBio })
-    setIsEditing(false)
-    toast.success("个人资料已更新")
+    try {
+      await updateProfile({ name: editName, bio: editBio })
+      setIsEditing(false)
+      toast.success("个人资料已更新")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "保存失败")
+    }
   }
 
   const handleLogout = () => {

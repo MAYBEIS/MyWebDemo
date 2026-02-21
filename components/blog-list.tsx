@@ -40,44 +40,32 @@ export function BlogList() {
     loadData()
   }, [])
 
-  // 搜索防抖
+  // 搜索和分类变化时重新加载文章
   useEffect(() => {
     const delaySearch = setTimeout(async () => {
-      if (search || activeCategory !== "全部") {
-        try {
-          setLoading(true)
-          const category = activeCategory === "全部" ? undefined : activeCategory
-          const result = await fetchPosts({ 
-            page: 1, 
-            limit: 20, 
-            search: search || undefined,
-            category
-          })
-          setPosts(result.posts)
-        } catch (err) {
-          console.error('Search failed:', err)
-        } finally {
-          setLoading(false)
-        }
-      } else if (!loading && posts.length === 0) {
-        // 初始加载
-        const result = await fetchPosts({ page: 1, limit: 20 })
+      try {
+        setLoading(true)
+        // 当选择"全部"或没有搜索词时，获取所有文章
+        const category = activeCategory === "全部" ? undefined : activeCategory
+        const result = await fetchPosts({ 
+          page: 1, 
+          limit: 20, 
+          search: search || undefined,
+          category
+        })
         setPosts(result.posts)
+      } catch (err) {
+        console.error('Search failed:', err)
+      } finally {
+        setLoading(false)
       }
     }, 300)
 
     return () => clearTimeout(delaySearch)
   }, [search, activeCategory])
 
-  // 过滤后的文章
-  const filteredPosts = posts.filter((post) => {
-    const matchesSearch =
-      post.title.toLowerCase().includes(search.toLowerCase()) ||
-      (post.excerpt?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
-      post.tags.some((tag) => tag.toLowerCase().includes(search.toLowerCase()))
-    const matchesCategory = activeCategory === "全部" || post.category === activeCategory
-    return matchesSearch && matchesCategory
-  })
+  // 获取要显示的文章（已经过 API 筛选）
+  const displayPosts = posts
 
   // 加载状态
   if (loading && posts.length === 0) {
@@ -178,7 +166,7 @@ export function BlogList() {
 
       {/* 文章列表 */}
       <div className="flex flex-col gap-3">
-        {filteredPosts.map((post) => (
+        {displayPosts.map((post) => (
           <Link key={post.slug} href={`/blog/${post.slug}`} className="group">
             <article className="rounded-xl border border-border/40 bg-card/30 p-6 transition-all duration-500 hover:border-primary/25 hover:bg-card/60">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -219,7 +207,7 @@ export function BlogList() {
           </Link>
         ))}
 
-        {filteredPosts.length === 0 && !loading && (
+        {displayPosts.length === 0 && !loading && (
           <div className="text-center py-20">
             <p className="text-muted-foreground/50 font-mono text-sm">
               {"// 没有找到匹配的文章"}
