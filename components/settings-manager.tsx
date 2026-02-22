@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Settings, Save, RotateCcw, Image, MessageSquare, Users, Check, AlertCircle, Globe, Search, Shield, Link, Layers } from "lucide-react"
+import { Settings, Save, RotateCcw, Image, MessageSquare, Users, Check, AlertCircle, Globe, Search, Shield, Link, Layers, Home, Terminal, Type } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -96,6 +96,138 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
             <Save className="h-4 w-4" />
             {isSaving ? '保存中...' : '保存设置'}
           </Button>
+        </div>
+      </div>
+
+      {/* 主页设置 */}
+      <div className="rounded-xl border border-border/40 bg-card/30 p-6 mb-6">
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+          <Home className="h-5 w-5 text-primary" />
+          主页设置
+        </h2>
+        
+        <div className="grid gap-6">
+          <div className="grid gap-2">
+            <Label htmlFor="hero_badge_text">角色标签文字</Label>
+            <Input
+              id="hero_badge_text"
+              value={settings.hero_badge_text?.value || ''}
+              onChange={(e) => updateSetting('hero_badge_text', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md"
+              placeholder="系统程序员 / Systems Programmer"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.hero_badge_text?.description || '主页顶部角色标签文字'}
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="hero_title_prefix">大标题前缀</Label>
+            <Input
+              id="hero_title_prefix"
+              value={settings.hero_title_prefix?.value || ''}
+              onChange={(e) => updateSetting('hero_title_prefix', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md"
+              placeholder="从零构建"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.hero_title_prefix?.description || '大标题开头文字（打字效果前）'}
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="hero_title_suffix">大标题后缀</Label>
+            <Input
+              id="hero_title_suffix"
+              value={settings.hero_title_suffix?.value || ''}
+              onChange={(e) => updateSetting('hero_title_suffix', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md"
+              placeholder="深入底层的每一个字节"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.hero_title_suffix?.description || '大标题结尾文字（打字效果后）'}
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="hero_typing_texts">打字效果文字列表</Label>
+            <Textarea
+              id="hero_typing_texts"
+              value={settings.hero_typing_texts?.value || ''}
+              onChange={(e) => updateSetting('hero_typing_texts', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md min-h-[80px]"
+              placeholder="内核模块,内存分配器,网络协议栈,文件系统"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.hero_typing_texts?.description || '打字效果循环显示的文字（用逗号分隔）'}
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="hero_description">主页描述</Label>
+            <Textarea
+              id="hero_description"
+              value={settings.hero_description?.value || ''}
+              onChange={(e) => updateSetting('hero_description', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md min-h-[80px]"
+              placeholder="专注于操作系统内核、编译器设计与高性能计算..."
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.hero_description?.description || '主页描述文字'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 终端窗口设置 */}
+      <div className="rounded-xl border border-border/40 bg-card/30 p-6 mb-6">
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+          <Terminal className="h-5 w-5 text-primary" />
+          终端窗口设置
+        </h2>
+        
+        <div className="grid gap-6">
+          <div className="grid gap-2">
+            <Label htmlFor="terminal_title">终端标题</Label>
+            <Input
+              id="terminal_title"
+              value={settings.terminal_title?.value || ''}
+              onChange={(e) => updateSetting('terminal_title', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md"
+              placeholder="zsh ~ /projects"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.terminal_title?.description || '终端窗口标题栏文字'}
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="terminal_command">终端命令</Label>
+            <Input
+              id="terminal_command"
+              value={settings.terminal_command?.value || ''}
+              onChange={(e) => updateSetting('terminal_command', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md"
+              placeholder="cat /proc/developer/skills"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.terminal_command?.description || '终端显示的命令'}
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="terminal_content">终端输出内容</Label>
+            <Textarea
+              id="terminal_content"
+              value={settings.terminal_content?.value || ''}
+              onChange={(e) => updateSetting('terminal_content', e.target.value)}
+              className="bg-background/30 border-border/40 max-w-md min-h-[100px] font-mono text-sm"
+              placeholder="lang:    C, Rust, Go, Python&#10;systems: Linux, RTOS, Embedded&#10;focus:   Kernel, Networking, Perf&#10;editor:  Neovim, VS Code"
+            />
+            <p className="text-xs text-muted-foreground/50">
+              {settings.terminal_content?.description || '终端输出内容（每行一项，使用换行分隔）'}
+            </p>
+          </div>
         </div>
       </div>
 

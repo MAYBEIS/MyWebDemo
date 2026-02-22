@@ -30,6 +30,16 @@ async function getSettings() {
     
     // 默认设置
     const defaults: Record<string, { value: string; description: string }> = {
+      // 主页设置
+      hero_badge_text: { value: '系统程序员 / Systems Programmer', description: '主页顶部角色标签文字' },
+      hero_title_prefix: { value: '从零构建', description: '大标题开头文字（打字效果前）' },
+      hero_title_suffix: { value: '深入底层的每一个字节', description: '大标题结尾文字（打字效果后）' },
+      hero_typing_texts: { value: '内核模块,内存分配器,网络协议栈,文件系统,编译器,虚拟化引擎', description: '打字效果循环显示的文字（用逗号分隔）' },
+      hero_description: { value: '专注于操作系统内核、编译器设计与高性能计算。在这里记录系统编程的思考与实践，探索内存管理、并发模型以及一切底层技术。', description: '主页描述文字' },
+      // 终端窗口设置
+      terminal_title: { value: 'zsh ~ /projects', description: '终端窗口标题栏文字' },
+      terminal_command: { value: 'cat /proc/developer/skills', description: '终端显示的命令' },
+      terminal_content: { value: 'lang:    C, Rust, Go, Python\nsystems: Linux, RTOS, Embedded\nfocus:   Kernel, Networking, Perf\neditor:  Neovim, VS Code', description: '终端输出内容（每行一项）' },
       // 博客基本设置
       site_title: { value: 'SysLog', description: '网站标题' },
       site_description: { value: '一个现代化的技术博客', description: '网站描述' },
@@ -61,6 +71,16 @@ async function getSettings() {
     return merged
   } catch {
     return {
+      // 主页设置
+      hero_badge_text: { value: '系统程序员 / Systems Programmer', description: '主页顶部角色标签文字' },
+      hero_title_prefix: { value: '从零构建', description: '大标题开头文字（打字效果前）' },
+      hero_title_suffix: { value: '深入底层的每一个字节', description: '大标题结尾文字（打字效果后）' },
+      hero_typing_texts: { value: '内核模块,内存分配器,网络协议栈,文件系统,编译器,虚拟化引擎', description: '打字效果循环显示的文字（用逗号分隔）' },
+      hero_description: { value: '专注于操作系统内核、编译器设计与高性能计算。在这里记录系统编程的思考与实践，探索内存管理、并发模型以及一切底层技术。', description: '主页描述文字' },
+      // 终端窗口设置
+      terminal_title: { value: 'zsh ~ /projects', description: '终端窗口标题栏文字' },
+      terminal_command: { value: 'cat /proc/developer/skills', description: '终端显示的命令' },
+      terminal_content: { value: 'lang:    C, Rust, Go, Python\nsystems: Linux, RTOS, Embedded\nfocus:   Kernel, Networking, Perf\neditor:  Neovim, VS Code', description: '终端输出内容（每行一项）' },
       // 博客基本设置
       site_title: { value: 'SysLog', description: '网站标题' },
       site_description: { value: '一个现代化的技术博客', description: '网站描述' },

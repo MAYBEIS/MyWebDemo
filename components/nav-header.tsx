@@ -32,12 +32,32 @@ const navLinks = [
   { href: "/guestbook", label: "留言板" },
 ]
 
+// 默认网站标题
+const DEFAULT_SITE_TITLE = 'SysLog'
+
 export function NavHeader() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [siteTitle, setSiteTitle] = useState(DEFAULT_SITE_TITLE)
   const pathname = usePathname()
   const { user, isLoggedIn } = useAuth()
+
+  // 获取网站设置
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch('/api/settings/public')
+        const data = await response.json()
+        if (data.success && data.data.site_title) {
+          setSiteTitle(data.data.site_title)
+        }
+      } catch (error) {
+        console.error('获取设置失败:', error)
+      }
+    }
+    fetchSettings()
+  }, [])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -80,7 +100,7 @@ export function NavHeader() {
             <div className="absolute inset-0 rounded-lg bg-primary/5 animate-glow-pulse opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
           <span className="font-mono text-lg font-bold tracking-tight text-foreground group-hover:text-primary transition-colors duration-300">
-            SysLog
+            {siteTitle}
           </span>
         </Link>
 

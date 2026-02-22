@@ -5,14 +5,29 @@ import Link from "next/link"
 import { ArrowRight, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-const typingTexts = [
-  "内核模块",
-  "内存分配器",
-  "网络协议栈",
-  "文件系统",
-  "编译器",
-  "虚拟化引擎",
-]
+// 设置类型定义
+interface SiteSettings {
+  hero_badge_text: string
+  hero_title_prefix: string
+  hero_title_suffix: string
+  hero_typing_texts: string
+  hero_description: string
+  terminal_title: string
+  terminal_command: string
+  terminal_content: string
+}
+
+// 默认设置
+const DEFAULT_SETTINGS: SiteSettings = {
+  hero_badge_text: '系统程序员 / Systems Programmer',
+  hero_title_prefix: '从零构建',
+  hero_title_suffix: '深入底层的每一个字节',
+  hero_typing_texts: '内核模块,内存分配器,网络协议栈,文件系统,编译器,虚拟化引擎',
+  hero_description: '专注于操作系统内核、编译器设计与高性能计算。在这里记录系统编程的思考与实践，探索内存管理、并发模型以及一切底层技术。',
+  terminal_title: 'zsh ~ /projects',
+  terminal_command: 'cat /proc/developer/skills',
+  terminal_content: 'lang:    C, Rust, Go, Python\nsystems: Linux, RTOS, Embedded\nfocus:   Kernel, Networking, Perf\neditor:  Neovim, VS Code',
+}
 
 function GridBackground() {
   return (
@@ -32,13 +47,24 @@ function GridBackground() {
   )
 }
 
-function TerminalWindow() {
+interface TerminalWindowProps {
+  title: string
+  command: string
+  content: string
+}
+
+function TerminalWindow({ title, command, content }: TerminalWindowProps) {
   const [visibleLines, setVisibleLines] = useState(0)
 
+  // 解析终端内容
+  const contentLines = content.split('\n').filter(line => line.trim())
+  const totalLines = contentLines.length + 2 // 命令行 + 内容行 + 光标行
+
   useEffect(() => {
+    setVisibleLines(0)
     const timer = setInterval(() => {
       setVisibleLines((prev) => {
-        if (prev >= 6) {
+        if (prev >= totalLines) {
           clearInterval(timer)
           return prev
         }
@@ -46,16 +72,7 @@ function TerminalWindow() {
       })
     }, 400)
     return () => clearInterval(timer)
-  }, [])
-
-  const lines = [
-    { prefix: "$", text: "cat /proc/developer/skills", isCommand: true },
-    { prefix: "", text: 'lang:    C, Rust, Go, Python', isCommand: false },
-    { prefix: "", text: 'systems: Linux, RTOS, Embedded', isCommand: false },
-    { prefix: "", text: 'focus:   Kernel, Networking, Perf', isCommand: false },
-    { prefix: "", text: 'editor:  Neovim, VS Code', isCommand: false },
-    { prefix: "$", text: "", isCommand: true, isCursor: true },
-  ]
+  }, [totalLines])
 
   return (
     <div className="rounded-xl border border-border/60 bg-card/60 glass overflow-hidden card-glow animate-slide-up-delay-3">
@@ -65,39 +82,72 @@ function TerminalWindow() {
           <div className="h-2.5 w-2.5 rounded-full bg-chart-4/70" />
           <div className="h-2.5 w-2.5 rounded-full bg-primary/70" />
         </div>
-        <span className="ml-2 text-xs font-mono text-muted-foreground/70">zsh ~ /projects</span>
+        <span className="ml-2 text-xs font-mono text-muted-foreground/70">{title}</span>
       </div>
       <div className="p-5 font-mono text-sm space-y-1.5">
-        {lines.map((line, i) => (
+        {/* 命令行 */}
+        <div
+          className={`flex items-center gap-2 transition-all duration-500 ${
+            visibleLines > 0 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
+          }`}
+        >
+          <span className="text-primary text-glow-sm">$</span>
+          <span className="text-muted-foreground">{command}</span>
+        </div>
+        
+        {/* 内容行 */}
+        {contentLines.map((line, i) => (
           <div
             key={i}
             className={`flex items-center gap-2 transition-all duration-500 ${
-              i < visibleLines ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
+              i < visibleLines - 1 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
             }`}
           >
-            {line.isCommand ? (
-              <>
-                <span className="text-primary text-glow-sm">$</span>
-                <span className="text-muted-foreground">{line.text}</span>
-                {line.isCursor && <span className="typing-cursor text-primary" />}
-              </>
-            ) : (
-              <span className="text-foreground/70 pl-5">{line.text}</span>
-            )}
+            <span className="text-foreground/70 pl-5">{line}</span>
           </div>
         ))}
+        
+        {/* 光标行 */}
+        <div
+          className={`flex items-center gap-2 transition-all duration-500 ${
+            visibleLines >= totalLines ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
+          }`}
+        >
+          <span className="text-primary text-glow-sm">$</span>
+          <span className="typing-cursor text-primary" />
+        </div>
       </div>
     </div>
   )
 }
 
 export function HeroSection() {
+  const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SETTINGS)
   const [currentTextIndex, setCurrentTextIndex] = useState(0)
   const [displayText, setDisplayText] = useState("")
   const [isDeleting, setIsDeleting] = useState(false)
 
+  // 获取设置
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch('/api/settings/public')
+        const data = await response.json()
+        if (data.success) {
+          setSettings({ ...DEFAULT_SETTINGS, ...data.data })
+        }
+      } catch (error) {
+        console.error('获取设置失败:', error)
+      }
+    }
+    fetchSettings()
+  }, [])
+
+  // 解析打字效果文字列表
+  const typingTexts = settings.hero_typing_texts.split(',').map(t => t.trim()).filter(t => t)
+
   const animate = useCallback(() => {
-    const currentFullText = typingTexts[currentTextIndex]
+    const currentFullText = typingTexts[currentTextIndex] || ''
     if (!isDeleting) {
       setDisplayText(currentFullText.slice(0, displayText.length + 1))
       if (displayText.length === currentFullText.length) {
@@ -110,7 +160,7 @@ export function HeroSection() {
         setCurrentTextIndex((prev) => (prev + 1) % typingTexts.length)
       }
     }
-  }, [displayText, isDeleting, currentTextIndex])
+  }, [displayText, isDeleting, currentTextIndex, typingTexts])
 
   useEffect(() => {
     const timeout = setTimeout(animate, isDeleting ? 40 : 90)
@@ -128,21 +178,20 @@ export function HeroSection() {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
             </span>
-            <span className="text-xs font-mono text-primary tracking-wide">系统程序员 / Systems Programmer</span>
+            <span className="text-xs font-mono text-primary tracking-wide">{settings.hero_badge_text}</span>
           </div>
         </div>
 
         <h1 className="text-5xl font-bold tracking-tight text-foreground sm:text-6xl lg:text-7xl leading-[1.08] animate-slide-up-delay-1">
-          <span className="text-balance">从零构建 </span>
+          <span className="text-balance">{settings.hero_title_prefix} </span>
           <span className="text-primary text-glow inline-block min-w-[4ch]">{displayText}</span>
           <span className="typing-cursor" />
           <br />
-          <span className="text-muted-foreground/80 text-balance">深入底层的每一个字节</span>
+          <span className="text-muted-foreground/80 text-balance">{settings.hero_title_suffix}</span>
         </h1>
 
         <p className="mt-7 max-w-2xl mx-auto text-lg text-muted-foreground leading-relaxed animate-slide-up-delay-2">
-          专注于操作系统内核、编译器设计与高性能计算。在这里记录系统编程的思考与实践，
-          探索内存管理、并发模型以及一切底层技术。
+          {settings.hero_description}
         </p>
 
         <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center animate-slide-up-delay-2">
@@ -168,7 +217,11 @@ export function HeroSection() {
         </div>
 
         <div className="mt-16 mx-auto max-w-xl">
-          <TerminalWindow />
+          <TerminalWindow 
+            title={settings.terminal_title}
+            command={settings.terminal_command}
+            content={settings.terminal_content}
+          />
         </div>
 
         <div className="mt-16 flex flex-col items-center gap-2 animate-fade-in" style={{ animationDelay: "2s" }}>
