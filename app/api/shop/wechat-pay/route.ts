@@ -14,6 +14,14 @@ import {
   generateFailResponse
 } from '@/lib/wechat-pay'
 
+// 测试模式配置
+const TEST_MODE = process.env.PAYMENT_TEST_MODE === 'true'
+const TEST_AUTO_SUCCESS_MS = parseInt(process.env.PAYMENT_TEST_AUTO_SUCCESS_MS || '5000', 10)
+const TEST_QR_CODE_URL = process.env.PAYMENT_TEST_QR_CODE_URL || 'weixin://wxpay/test_mode_simulated'
+
+// 存储测试模式下的支付状态（内存存储，重启后清空）
+const testPaymentStatus = new Map<string, { paid: boolean; createdAt: number }>()
+
 /**
  * 创建微信支付订单
  * POST /api/shop/wechat-pay
@@ -89,6 +97,37 @@ export async function POST(request: NextRequest) {
         { success: false, error: '订单状态不允许支付' },
         { status: 400 }
       )
+    }
+
+    // 测试模式：返回模拟的支付二维码
+    if (TEST_MODE) {
+      console.log('[测试模式] 创建模拟支付订单:', order.orderNo)
+      
+      // 记录测试支付状态
+      testPaymentStatus.set(order.orderNo, {
+        paid: false,
+        createdAt: Date.now()
+      })
+      
+      // 更新订单的支付方式
+      await prisma.orders.update({
+        where: { id: orderId },
+        data: {
+          paymentMethod: 'wechat',
+          remark: '测试模式支付'
+        }
+      })
+      
+      return NextResponse.json({
+        success: true,
+        data: {
+          prepayId: `test_prepay_id_${Date.now()}`,
+          codeUrl: TEST_QR_CODE_URL,
+          orderNo: order.orderNo,
+          testMode: true,
+          autoSuccessMs: TEST_AUTO_SUCCESS_MS
+        }
+      })
     }
 
     // 调用微信统一下单接口
@@ -217,6 +256,53 @@ export async function GET(request: NextRequest) {
         data: {
           tradeState: 'SUCCESS',
           orderStatus: order.status
+        }
+      })
+    }
+
+    // 测试模式：模拟支付状态检查
+    if (TEST_MODE) {
+      const testStatus = testPaymentStatus.get(orderNo)
+      
+      // 如果没有测试状态记录，创建一个
+      if (!testStatus) {
+        testPaymentStatus.set(orderNo, {
+          paid: false,
+          createdAt: Date.now()
+        })
+      }
+      
+      const status = testPaymentStatus.get(orderNo)!
+      const elapsed = Date.now() - status.createdAt
+      
+      // 检查是否应该自动成功
+      if (!status.paid && TEST_AUTO_SUCCESS_MS > 0 && elapsed >= TEST_AUTO_SUCCESS_MS) {
+        status.paid = true
+        console.log('[测试模式] 自动支付成功:', orderNo)
+        
+        // 更新订单状态
+        await updateOrderPaid(order.id, `test_transaction_${Date.now()}`)
+        
+        return NextResponse.json({
+          success: true,
+          data: {
+            tradeState: 'SUCCESS',
+            tradeStateDesc: '支付成功（测试模式）',
+            orderStatus: 'paid',
+            testMode: true
+          }
+        })
+      }
+      
+      // 返回当前状态
+      return NextResponse.json({
+        success: true,
+        data: {
+          tradeState: status.paid ? 'SUCCESS' : 'NOTPAY',
+          tradeStateDesc: status.paid ? '支付成功（测试模式）' : '等待支付（测试模式）',
+          orderStatus: status.paid ? 'paid' : 'pending',
+          testMode: true,
+          remainingMs: TEST_AUTO_SUCCESS_MS > 0 ? Math.max(0, TEST_AUTO_SUCCESS_MS - elapsed) : null
         }
       })
     }
