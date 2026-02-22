@@ -356,6 +356,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * 更新订单为已支付状态
+ * 处理密钥分配和会员权益
  */
 async function updateOrderPaid(orderId: string, transactionId: string) {
   const order = await prisma.orders.findUnique({
@@ -363,75 +364,101 @@ async function updateOrderPaid(orderId: string, transactionId: string) {
     include: { products: true }
   })
 
-  if (!order) return
-
-  // 更新订单状态
-  const updateData: any = {
-    status: 'paid',
-    paymentTime: new Date(),
-    updatedAt: new Date(),
-    remark: `微信支付交易号: ${transactionId}`
+  if (!order) {
+    console.error('[updateOrderPaid] 订单不存在:', orderId)
+    return
   }
 
-  // 如果产品需要密钥，分配密钥
-  if (order.products && order.products.stock !== -1) {
-    const availableKey = await prisma.product_keys.findFirst({
-      where: {
-        productId: order.productId,
-        status: 'available'
-      }
-    })
+  console.log('[updateOrderPaid] 开始处理订单:', orderId, '产品类型:', order.products?.type, '库存:', order.products?.stock)
 
-    if (availableKey) {
-      await prisma.product_keys.update({
-        where: { id: availableKey.id },
-        data: {
-          status: 'sold',
-          orderId: order.id,
-          userId: order.userId
-        }
-      })
-      updateData.productKey = availableKey.key
+  // 使用事务确保数据一致性
+  await prisma.$transaction(async (tx) => {
+    // 更新订单状态
+    const updateData: any = {
+      status: 'paid',
+      paymentTime: new Date(),
+      updatedAt: new Date(),
+      remark: `微信支付交易号: ${transactionId}`
     }
-  }
 
-  // 如果是会员产品，更新用户会员状态
-  if (order.products && order.products.type === 'membership' && order.products.duration) {
-    const existingMembership = await prisma.user_memberships.findUnique({
-      where: { userId: order.userId }
-    })
-
-    const startDate = new Date()
-    const endDate = new Date()
-    endDate.setDate(endDate.getDate() + order.products.duration)
-
-    if (existingMembership) {
-      const newEndDate = new Date(existingMembership.endDate)
-      newEndDate.setDate(newEndDate.getDate() + order.products.duration)
+    // 如果产品需要密钥（库存不是无限），分配密钥
+    if (order.products && order.products.stock !== -1 && order.products.type === 'serial_key') {
+      console.log('[updateOrderPaid] 查找可用密钥...')
       
-      await prisma.user_memberships.update({
-        where: { userId: order.userId },
-        data: {
-          endDate: newEndDate,
-          active: true,
-          updatedAt: new Date()
+      const availableKey = await tx.product_keys.findFirst({
+        where: {
+          productId: order.productId,
+          status: 'available'
         }
       })
-    } else {
-      await prisma.user_memberships.create({
-        data: {
-          id: `membership_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          userId: order.userId,
-          type: order.products.duration >= 365 ? 'yearly' : 'monthly',
-          startDate,
-          endDate
-        }
-      })
-    }
-  }
 
-  await prisma.orders.update({
-    where: { id: orderId },
-    data: updateData
+      if (availableKey) {
+        console.log('[updateOrderPaid] 找到密钥，分配给用户:', availableKey.key)
+        
+        // 更新密钥状态
+        await tx.product_keys.update({
+          where: { id: availableKey.id },
+          data: {
+            status: 'sold',
+            orderId: order.id,
+            userId: order.userId
+          }
+        })
+        
+        // 更新订单的密钥字段
+        updateData.productKey = availableKey.key
+      } else {
+        console.warn('[updateOrderPaid] 没有找到可用密钥，产品ID:', order.productId)
+      }
+    }
+
+    // 如果是会员产品，更新用户会员状态
+    if (order.products && order.products.type === 'membership' && order.products.duration) {
+      console.log('[updateOrderPaid] 处理会员权益，时长:', order.products.duration, '天')
+      
+      const existingMembership = await tx.user_memberships.findUnique({
+        where: { userId: order.userId }
+      })
+
+      const startDate = new Date()
+      const endDate = new Date()
+      endDate.setDate(endDate.getDate() + order.products.duration)
+
+      if (existingMembership) {
+        // 如果已有会员，延长会员时间
+        const newEndDate = new Date(existingMembership.endDate)
+        newEndDate.setDate(newEndDate.getDate() + order.products.duration)
+        
+        await tx.user_memberships.update({
+          where: { userId: order.userId },
+          data: {
+            endDate: newEndDate,
+            active: true,
+            updatedAt: new Date()
+          }
+        })
+        console.log('[updateOrderPaid] 会员已延长至:', newEndDate)
+      } else {
+        // 创建新会员
+        await tx.user_memberships.create({
+          data: {
+            id: `membership_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            userId: order.userId,
+            type: order.products.duration >= 365 ? 'yearly' : 'monthly',
+            startDate,
+            endDate
+          }
+        })
+        console.log('[updateOrderPaid] 新会员已创建，到期时间:', endDate)
+      }
+    }
+
+    // 更新订单
+    await tx.orders.update({
+      where: { id: orderId },
+      data: updateData
+    })
+    
+    console.log('[updateOrderPaid] 订单更新完成:', orderId)
   })
 }

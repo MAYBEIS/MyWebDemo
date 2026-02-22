@@ -56,6 +56,8 @@ interface Order {
     name: string
     type: string
     image: string | null
+    description?: string
+    price?: number
   }
   product_keys?: {
     id: string
@@ -409,30 +411,52 @@ export default function OrdersPage() {
                   </div>
                 </div>
 
-                {/* 显示密钥 */}
-                {order.product_keys && order.product_keys.length > 0 && (
+                {/* 显示密钥（订单已支付且有密钥） */}
+                {(order.status === 'paid' || order.status === 'completed') && (order.productKey || (order.product_keys && order.product_keys.length > 0)) && (
                   <div className="mt-4 pt-4 border-t">
                     <div className="text-sm text-muted-foreground mb-2">产品密钥</div>
-                    <div className="space-y-2">
-                      {order.product_keys.map((key) => (
-                        <div key={key.id} className="flex items-center gap-2">
-                          <code className="bg-muted px-3 py-1.5 rounded font-mono text-sm flex-1">
-                            {key.key}
-                          </code>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleCopy(key.key)}
-                          >
-                            {copiedKey === key.key ? (
-                              <Check className="h-4 w-4 text-green-500" />
-                            ) : (
-                              <Copy className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
+                    {/* 显示订单直接存储的密钥 */}
+                    {order.productKey && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <code className="bg-muted px-3 py-1.5 rounded font-mono text-sm flex-1 break-all">
+                          {order.productKey}
+                        </code>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCopy(order.productKey!)}
+                        >
+                          {copiedKey === order.productKey ? (
+                            <Check className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                    {/* 显示关联表的密钥 */}
+                    {order.product_keys && order.product_keys.length > 0 && (
+                      <div className="space-y-2">
+                        {order.product_keys.map((key) => (
+                          <div key={key.id} className="flex items-center gap-2">
+                            <code className="bg-muted px-3 py-1.5 rounded font-mono text-sm flex-1 break-all">
+                              {key.key}
+                            </code>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleCopy(key.key)}
+                            >
+                              {copiedKey === key.key ? (
+                                <Check className="h-4 w-4 text-green-500" />
+                              ) : (
+                                <Copy className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -453,27 +477,41 @@ export default function OrdersPage() {
 
           {selectedOrder && (
             <div className="space-y-4 py-4">
+              {/* 产品信息 */}
+              <div className="p-3 rounded-lg bg-muted/30 border">
+                <div className="font-medium text-lg mb-1">{selectedOrder.products?.name}</div>
+                {selectedOrder.products?.description && (
+                  <div className="text-sm text-muted-foreground">{selectedOrder.products.description}</div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm text-muted-foreground">产品</div>
-                  <div className="font-medium">{selectedOrder.products?.name}</div>
+                  <div className="text-sm text-muted-foreground">订单金额</div>
+                  <div className="font-medium text-lg text-primary">{formatPrice(selectedOrder.amount)}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">订单金额</div>
-                  <div className="font-medium text-lg">{formatPrice(selectedOrder.amount)}</div>
+                  <div className="text-sm text-muted-foreground">订单状态</div>
+                  {getStatusBadge(selectedOrder.status)}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm text-muted-foreground">状态</div>
-                  {getStatusBadge(selectedOrder.status)}
-                </div>
-                <div>
                   <div className="text-sm text-muted-foreground">支付方式</div>
                   <div className="font-medium">
                     {selectedOrder.paymentMethod === 'wechat' ? '微信支付' : 
+                     selectedOrder.paymentMethod === 'manual' ? '人工处理' :
                      selectedOrder.paymentMethod || '-'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">产品类型</div>
+                  <div className="font-medium">
+                    {selectedOrder.products?.type === 'membership' ? '会员' :
+                     selectedOrder.products?.type === 'serial_key' ? '序列号' :
+                     selectedOrder.products?.type === 'digital' ? '数字产品' :
+                     selectedOrder.products?.type || '-'}
                   </div>
                 </div>
               </div>
@@ -489,14 +527,37 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              {/* 显示关联的密钥 */}
+              {/* 显示订单中的密钥（直接存储在订单上的） */}
+              {selectedOrder.productKey && (
+                <div>
+                  <div className="text-sm text-muted-foreground mb-2">产品密钥</div>
+                  <div className="flex items-center gap-2">
+                    <code className="bg-muted px-3 py-2 rounded font-mono text-sm flex-1 break-all">
+                      {selectedOrder.productKey}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCopy(selectedOrder.productKey!)}
+                    >
+                      {copiedKey === selectedOrder.productKey ? (
+                        <Check className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* 显示关联的密钥（从 product_keys 表关联的） */}
               {selectedOrder.product_keys && selectedOrder.product_keys.length > 0 && (
                 <div>
                   <div className="text-sm text-muted-foreground mb-2">产品密钥</div>
                   <div className="space-y-2">
                     {selectedOrder.product_keys.map((key) => (
                       <div key={key.id} className="flex items-center gap-2">
-                        <code className="bg-muted px-3 py-2 rounded font-mono text-sm flex-1">
+                        <code className="bg-muted px-3 py-2 rounded font-mono text-sm flex-1 break-all">
                           {key.key}
                         </code>
                         <Button
@@ -512,6 +573,16 @@ export default function OrdersPage() {
                         </Button>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 显示备注信息 */}
+              {selectedOrder.remark && (
+                <div>
+                  <div className="text-sm text-muted-foreground mb-1">备注</div>
+                  <div className="text-sm bg-muted/30 px-3 py-2 rounded">
+                    {selectedOrder.remark}
                   </div>
                 </div>
               )}

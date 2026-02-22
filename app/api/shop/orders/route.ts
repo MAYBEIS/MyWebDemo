@@ -81,7 +81,9 @@ export async function GET(request: NextRequest) {
             id: true,
             name: true,
             type: true,
-            image: true
+            image: true,
+            description: true,
+            price: true
           }
         },
         users: {
@@ -93,6 +95,7 @@ export async function GET(request: NextRequest) {
         },
         product_keys: {
           select: {
+            id: true,
             key: true,
             status: true,
             expiresAt: true
