@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, X, Terminal, ChevronRight, User, LogOut, Settings, Shield } from "lucide-react"
+import { Menu, X, Terminal, ChevronRight, User, LogOut, Settings, Shield, ShoppingCart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useAuth, logout } from "@/lib/auth-store"
@@ -89,7 +89,7 @@ export function NavHeader() {
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
         isScrolled
           ? "glass-strong border-b border-border/50 shadow-lg shadow-background/20"
-          : "bg-transparent"
+          : "glass border-b border-border/30"
       }`}
     >
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 h-16">
@@ -166,6 +166,12 @@ export function NavHeader() {
                         <Shield className="h-4 w-4" /> 管理后台
                       </Link>
                     )}
+                    <Link
+                      href="/orders"
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground/70 hover:text-foreground hover:bg-secondary/30 transition-all duration-200"
+                    >
+                      <ShoppingCart className="h-4 w-4" /> 我的订单
+                    </Link>
                     <Link
                       href="/profile"
                       className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground/70 hover:text-foreground hover:bg-secondary/30 transition-all duration-200"

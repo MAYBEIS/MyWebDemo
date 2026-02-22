@@ -99,6 +99,7 @@ model users {
   orders          orders[]
   product_keys    product_keys[]
   user_memberships user_memberships?
+  user_coupons    user_coupons[]
 }
 
 // 用户对文章的点赞记录
@@ -234,4 +235,44 @@ model payment_channels {
 
   @@index([code])
   @@index([enabled])
+}
+
+// 优惠券
+model coupons {
+  id          String   @id
+  code        String   @unique  // 优惠券代码
+  name        String            // 优惠券名称
+  type        String            // 类型: percentage(百分比), fixed(固定金额)
+  value       Float             // 折扣值(百分比或固定金额)
+  minAmount   Float    @default(0)  // 最低订单金额
+  maxDiscount Float?             // 最大折扣金额(百分比折扣时有效)
+  totalCount  Int      @default(-1)  // 总数量(-1表示无限)
+  usedCount   Int      @default(0)   // 已使用数量
+  startTime   DateTime           // 生效开始时间
+  endTime     DateTime           // 生效结束时间
+  status      Boolean  @default(true) // 是否启用
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user_coupons user_coupons[]
+
+  @@index([code])
+  @@index([status])
+}
+
+// 用户优惠券
+model user_coupons {
+  id        String   @id
+  userId    String
+  couponId  String
+  orderId   String?  // 使用该优惠券的订单ID
+  status    String   @default("unused") // unused, used, expired
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  coupons   coupons  @relation(fields: [couponId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, couponId])
+  @@index([userId])
+  @@index([status])
 }

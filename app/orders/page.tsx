@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,10 +11,33 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Loader2, ShoppingBag, Eye, Copy, Check, QrCode, RefreshCw } from 'lucide-react'
+import { Loader2, ShoppingBag, Eye, Copy, Check, QrCode, RefreshCw, X, Clock } from 'lucide-react'
 import { useAuth } from '@/lib/auth-store'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
+
+// 订单超时时间（30分钟）
+const ORDER_TIMEOUT_MS = 30 * 60 * 1000
+
+// 计算剩余时间的函数
+function getRemainingTime(createdAt: string): { remaining: number; formatted: string } {
+  const created = new Date(createdAt).getTime()
+  const now = Date.now()
+  const elapsed = now - created
+  const remaining = Math.max(0, ORDER_TIMEOUT_MS - elapsed)
+  
+  if (remaining <= 0) {
+    return { remaining: 0, formatted: '已超时' }
+  }
+  
+  const minutes = Math.floor(remaining / 60000)
+  const seconds = Math.floor((remaining % 60000) / 1000)
+  
+  return {
+    remaining,
+    formatted: `${minutes}:${seconds.toString().padStart(2, '0')}`
+  }
+}
 
 // 订单类型定义
 interface Order {
@@ -63,6 +86,9 @@ export default function OrdersPage() {
   const [payQrCodeUrl, setPayQrCodeUrl] = useState<string | null>(null)
   const [payingOrder, setPayingOrder] = useState<Order | null>(null)
   const [checkingPayment, setCheckingPayment] = useState(false)
+  
+  // 倒计时状态
+  const [countdowns, setCountdowns] = useState<Record<string, string>>({})
   
   const { isLoggedIn } = useAuth()
   const router = useRouter()
@@ -124,6 +150,41 @@ export default function OrdersPage() {
 
     return () => clearInterval(interval)
   }, [payQrDialogOpen, payingOrder])
+
+  // 更新待支付订单的倒计时
+  useEffect(() => {
+    const updateCountdowns = () => {
+      const newCountdowns: Record<string, string> = {}
+      let hasExpiredOrder = false
+      
+      orders.forEach(order => {
+        if (order.status === 'pending') {
+          const { remaining, formatted } = getRemainingTime(order.createdAt)
+          newCountdowns[order.id] = formatted
+          
+          // 如果订单刚超时，刷新列表
+          if (remaining === 0) {
+            hasExpiredOrder = true
+          }
+        }
+      })
+      
+      setCountdowns(newCountdowns)
+      
+      // 如果有订单超时，刷新列表
+      if (hasExpiredOrder) {
+        fetchOrders()
+      }
+    }
+    
+    // 立即更新一次
+    updateCountdowns()
+    
+    // 每秒更新倒计时
+    const interval = setInterval(updateCountdowns, 1000)
+    
+    return () => clearInterval(interval)
+  }, [orders])
 
   const fetchOrders = async () => {
     try {
@@ -208,6 +269,31 @@ export default function OrdersPage() {
     }
   }
 
+  // 取消订单
+  const handleCancelOrder = async (orderId: string) => {
+    if (!confirm('确定要取消这个订单吗？')) return
+    
+    try {
+      const response = await fetch(`/api/shop/orders?id=${orderId}`, {
+        method: 'DELETE'
+      })
+      const data = await response.json()
+      
+      if (data.success) {
+        toast.success('订单已取消')
+        fetchOrders()
+        if (selectedOrder?.id === orderId) {
+          setDetailDialogOpen(false)
+        }
+      } else {
+        toast.error(data.error || '取消订单失败')
+      }
+    } catch (error) {
+      console.error('取消订单失败:', error)
+      toast.error('取消订单失败')
+    }
+  }
+
   // 格式化价格
   const formatPrice = (price: number | undefined | null) => {
     if (price === undefined || price === null) return '¥0.00'
@@ -267,6 +353,21 @@ export default function OrdersPage() {
                       <div className="text-sm text-muted-foreground">
                         {formatDateTime(order.createdAt)}
                       </div>
+                      {/* 待支付订单显示倒计时 */}
+                      {order.status === 'pending' && countdowns[order.id] && (
+                        <div className="flex items-center gap-1.5 mt-1 text-sm">
+                          <Clock className="h-3.5 w-3.5 text-orange-500" />
+                          <span className={`font-mono ${
+                            countdowns[order.id] === '已超时' 
+                              ? 'text-destructive' 
+                              : parseInt(countdowns[order.id].split(':')[0]) < 5 
+                                ? 'text-orange-500' 
+                                : 'text-muted-foreground'
+                          }`}>
+                            剩余时间: {countdowns[order.id]}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
@@ -275,15 +376,26 @@ export default function OrdersPage() {
                       {getStatusBadge(order.status)}
                     </div>
                     <div className="flex gap-2">
-                      {/* 待支付订单显示微信支付按钮 */}
+                      {/* 待支付订单显示微信支付和取消按钮 */}
                       {order.status === 'pending' && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleWechatPay(order)}
-                        >
-                          <QrCode className="h-4 w-4 mr-1" />
-                          微信支付
-                        </Button>
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={() => handleWechatPay(order)}
+                          >
+                            <QrCode className="h-4 w-4 mr-1" />
+                            微信支付
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCancelOrder(order.id)}
+                            className="text-destructive hover:bg-destructive/10"
+                          >
+                            <X className="h-4 w-4 mr-1" />
+                            取消
+                          </Button>
+                        </>
                       )}
                       <Button
                         variant="outline"

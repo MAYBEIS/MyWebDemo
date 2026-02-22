@@ -20,7 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ShoppingCart, Crown, Key, Check, Loader2, CreditCard, QrCode } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { ShoppingCart, Crown, Key, Check, Loader2, CreditCard, QrCode, Ticket } from 'lucide-react'
 import { useAuth } from '@/lib/auth-store'
 import { toast } from 'sonner'
 
@@ -69,6 +70,17 @@ export default function ShopPage() {
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('wechat')
+  
+  // 优惠券相关状态
+  const [couponCode, setCouponCode] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    id: string
+    code: string
+    name: string
+    discountAmount: number
+    finalAmount: number
+  } | null>(null)
+  const [validatingCoupon, setValidatingCoupon] = useState(false)
 
   // 获取产品列表
   useEffect(() => {
@@ -98,7 +110,39 @@ export default function ShopPage() {
       return
     }
     setSelectedProduct(product)
+    setAppliedCoupon(null)
+    setCouponCode('')
     setPaymentDialogOpen(true)
+  }
+
+  // 验证并应用优惠券
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim() || !selectedProduct) return
+    
+    setValidatingCoupon(true)
+    try {
+      const response = await fetch(`/api/shop/coupons?code=${encodeURIComponent(couponCode.trim())}&amount=${selectedProduct.price}`)
+      const data = await response.json()
+      
+      if (data.success) {
+        setAppliedCoupon(data.data)
+        toast.success(`优惠券已应用，优惠 ¥${data.data.discountAmount.toFixed(2)}`)
+      } else {
+        toast.error(data.error || '优惠券无效')
+      }
+    } catch (error) {
+      console.error('验证优惠券失败:', error)
+      toast.error('验证优惠券失败')
+    } finally {
+      setValidatingCoupon(false)
+    }
+  }
+
+  // 取消优惠券
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null)
+    setCouponCode('')
+    toast.info('已取消优惠券')
   }
 
   // 确认购买
@@ -117,7 +161,8 @@ export default function ShopPage() {
         },
         body: JSON.stringify({
           productId: selectedProduct.id,
-          paymentMethod: selectedPaymentMethod
+          paymentMethod: selectedPaymentMethod,
+          couponCode: appliedCoupon?.code
         })
       })
 
@@ -294,13 +339,70 @@ export default function ShopPage() {
           </DialogHeader>
           
           <div className="py-4">
+            {/* 价格显示 */}
             <div className="mb-4">
               <div className="text-sm text-muted-foreground mb-2">订单金额</div>
-              <div className="text-2xl font-bold text-primary">
-                {selectedProduct && `¥${selectedProduct.price.toFixed(2)}`}
-              </div>
+              {appliedCoupon ? (
+                <div className="space-y-1">
+                  <div className="text-lg line-through text-muted-foreground">
+                    {selectedProduct && `¥${selectedProduct.price.toFixed(2)}`}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-bold text-primary">
+                      ¥{appliedCoupon.finalAmount.toFixed(2)}
+                    </span>
+                    <Badge variant="secondary" className="text-xs">
+                      -¥{appliedCoupon.discountAmount.toFixed(2)}
+                    </Badge>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-2xl font-bold text-primary">
+                  {selectedProduct && `¥${selectedProduct.price.toFixed(2)}`}
+                </div>
+              )}
             </div>
             
+            {/* 优惠券输入 */}
+            <div className="mb-4 p-3 rounded-lg border border-border/60 bg-muted/30">
+              <div className="flex items-center gap-2 mb-2">
+                <Ticket className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium">优惠券</span>
+              </div>
+              {appliedCoupon ? (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium">{appliedCoupon.name}</div>
+                    <div className="text-xs text-muted-foreground">{appliedCoupon.code}</div>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={handleRemoveCoupon}>
+                    取消
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="输入优惠券代码"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button 
+                    variant="outline" 
+                    onClick={handleApplyCoupon}
+                    disabled={!couponCode.trim() || validatingCoupon}
+                  >
+                    {validatingCoupon ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      '应用'
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+            
+            {/* 支付方式选择 */}
             <div className="space-y-3">
               <div className="text-sm text-muted-foreground">选择支付方式</div>
               {Object.entries(paymentMethods).map(([key, method]) => {

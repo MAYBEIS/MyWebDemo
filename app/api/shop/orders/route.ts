@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth-service'
 
+// 订单超时时间（毫秒）- 30分钟
+const ORDER_TIMEOUT_MS = 30 * 60 * 1000
+
 // 生成订单号
 function generateOrderNo() {
   const date = new Date()
@@ -10,6 +13,26 @@ function generateOrderNo() {
   const day = String(date.getDate()).padStart(2, '0')
   const random = Math.random().toString(36).substr(2, 8).toUpperCase()
   return `ORD${year}${month}${day}${random}`
+}
+
+// 检查并取消超时订单
+async function cancelExpiredOrders() {
+  const timeoutDate = new Date(Date.now() - ORDER_TIMEOUT_MS)
+  const expiredOrders = await prisma.orders.findMany({
+    where: {
+      status: 'pending',
+      createdAt: { lt: timeoutDate }
+    }
+  })
+  
+  for (const order of expiredOrders) {
+    await prisma.orders.update({
+      where: { id: order.id },
+      data: { status: 'cancelled', remark: '订单超时自动取消' }
+    })
+  }
+  
+  return expiredOrders.length
 }
 
 // 获取订单列表
@@ -31,6 +54,9 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       )
     }
+
+    // 检查并取消超时订单
+    await cancelExpiredOrders()
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
@@ -112,7 +138,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { productId, paymentMethod } = body
+    const { productId, paymentMethod, couponCode } = body
 
     if (!productId) {
       return NextResponse.json(
@@ -163,6 +189,48 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // 计算最终金额（应用优惠券）
+    let finalAmount = product.price
+    let couponInfo = null
+    
+    if (couponCode) {
+      // 验证优惠券
+      const coupon = await prisma.coupons.findUnique({
+        where: { code: couponCode }
+      })
+      
+      if (coupon && coupon.status) {
+        const now = new Date()
+        if (now >= coupon.startTime && now <= coupon.endTime) {
+          // 检查使用次数
+          if (coupon.totalCount === -1 || coupon.usedCount < coupon.totalCount) {
+            // 检查最低订单金额
+            if (product.price >= coupon.minAmount) {
+              // 计算折扣
+              let discountAmount = 0
+              if (coupon.type === 'percentage') {
+                discountAmount = product.price * (coupon.value / 100)
+                if (coupon.maxDiscount && discountAmount > coupon.maxDiscount) {
+                  discountAmount = coupon.maxDiscount
+                }
+              } else {
+                discountAmount = coupon.value
+              }
+              
+              finalAmount = Math.max(0, product.price - discountAmount)
+              couponInfo = { couponId: coupon.id, code: coupon.code }
+              
+              // 增加优惠券使用次数
+              await prisma.coupons.update({
+                where: { id: coupon.id },
+                data: { usedCount: { increment: 1 } }
+              })
+            }
+          }
+        }
+      }
+    }
+
     // 创建订单
     const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     const orderNo = generateOrderNo()
@@ -173,9 +241,10 @@ export async function POST(request: NextRequest) {
         orderNo,
         userId: user.id,
         productId,
-        amount: product.price,
+        amount: finalAmount,
         status: 'pending',
-        paymentMethod: paymentMethod || null
+        paymentMethod: paymentMethod || null,
+        remark: couponInfo ? `使用优惠券: ${couponInfo.code}` : null
       }
     })
 
@@ -307,6 +376,88 @@ export async function PUT(request: NextRequest) {
     console.error('更新订单失败:', error)
     return NextResponse.json(
       { success: false, error: '更新订单失败' },
+      { status: 500 }
+    )
+  }
+}
+
+// 用户取消订单
+export async function DELETE(request: NextRequest) {
+  try {
+    // 验证用户登录
+    const token = request.cookies.get('auth_token')?.value || request.cookies.get('token')?.value
+    if (!token) {
+      return NextResponse.json(
+        { success: false, error: '未登录' },
+        { status: 401 }
+      )
+    }
+
+    const user = await verifyToken(token)
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: '登录已过期' },
+        { status: 401 }
+      )
+    }
+
+    const { searchParams } = new URL(request.url)
+    const orderId = searchParams.get('id')
+
+    if (!orderId) {
+      return NextResponse.json(
+        { success: false, error: '缺少订单ID' },
+        { status: 400 }
+      )
+    }
+
+    // 查找订单
+    const order = await prisma.orders.findUnique({
+      where: { id: orderId }
+    })
+
+    if (!order) {
+      return NextResponse.json(
+        { success: false, error: '订单不存在' },
+        { status: 404 }
+      )
+    }
+
+    // 验证订单所有权（管理员可以取消任何订单）
+    if (order.userId !== user.id && !user.isAdmin) {
+      return NextResponse.json(
+        { success: false, error: '无权操作此订单' },
+        { status: 403 }
+      )
+    }
+
+    // 只能取消待支付的订单
+    if (order.status !== 'pending') {
+      return NextResponse.json(
+        { success: false, error: '只能取消待支付的订单' },
+        { status: 400 }
+      )
+    }
+
+    // 取消订单
+    const updatedOrder = await prisma.orders.update({
+      where: { id: orderId },
+      data: {
+        status: 'cancelled',
+        remark: '用户主动取消',
+        updatedAt: new Date()
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      data: updatedOrder,
+      message: '订单已取消'
+    })
+  } catch (error) {
+    console.error('取消订单失败:', error)
+    return NextResponse.json(
+      { success: false, error: '取消订单失败' },
       { status: 500 }
     )
   }
