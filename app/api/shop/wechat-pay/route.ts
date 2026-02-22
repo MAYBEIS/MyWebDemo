@@ -45,19 +45,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 优先从数据库获取配置，其次从环境变量获取
-    let config = await getWechatPayConfigFromDB()
-    if (!config) {
-      config = getWechatPayConfig()
-    }
-    
-    if (!config) {
-      return NextResponse.json(
-        { success: false, error: '微信支付未配置，请在后台配置支付渠道' },
-        { status: 500 }
-      )
-    }
-
     const body = await request.json()
     const { orderId, tradeType = 'NATIVE' } = body
 
@@ -99,7 +86,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 测试模式：返回模拟的支付二维码
+    // 测试模式：返回模拟的支付二维码（无需真实配置）
     if (TEST_MODE) {
       console.log('[测试模式] 创建模拟支付订单:', order.orderNo)
       
@@ -128,6 +115,20 @@ export async function POST(request: NextRequest) {
           autoSuccessMs: TEST_AUTO_SUCCESS_MS
         }
       })
+    }
+
+    // 非测试模式：需要真实的微信支付配置
+    // 优先从数据库获取配置，其次从环境变量获取
+    let config = await getWechatPayConfigFromDB()
+    if (!config) {
+      config = getWechatPayConfig()
+    }
+    
+    if (!config) {
+      return NextResponse.json(
+        { success: false, error: '微信支付未配置，请在后台配置支付渠道' },
+        { status: 500 }
+      )
     }
 
     // 调用微信统一下单接口
@@ -210,15 +211,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // 获取微信支付配置
-    const config = getWechatPayConfig()
-    if (!config) {
-      return NextResponse.json(
-        { success: false, error: '微信支付未配置' },
-        { status: 500 }
-      )
-    }
-
     const { searchParams } = new URL(request.url)
     const orderNo = searchParams.get('orderNo')
 
@@ -260,7 +252,7 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // 测试模式：模拟支付状态检查
+    // 测试模式：模拟支付状态检查（无需真实配置）
     if (TEST_MODE) {
       const testStatus = testPaymentStatus.get(orderNo)
       
@@ -305,6 +297,20 @@ export async function GET(request: NextRequest) {
           remainingMs: TEST_AUTO_SUCCESS_MS > 0 ? Math.max(0, TEST_AUTO_SUCCESS_MS - elapsed) : null
         }
       })
+    }
+
+    // 非测试模式：需要真实的微信支付配置
+    // 优先从数据库获取配置，其次从环境变量获取
+    let config = await getWechatPayConfigFromDB()
+    if (!config) {
+      config = getWechatPayConfig()
+    }
+    
+    if (!config) {
+      return NextResponse.json(
+        { success: false, error: '微信支付未配置，请在后台配置支付渠道' },
+        { status: 500 }
+      )
     }
 
     // 查询微信订单状态
