@@ -161,21 +161,22 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
     }))
   }
 
+  // 将中文标签映射到配置键
+  const configKeyMap: Record<string, string> = {
+    '公众号AppID': 'appId',
+    '商户号': 'mchId',
+    'API密钥': 'apiKey',
+    'API V3密钥': 'apiV3Key',
+    '证书序列号': 'serialNo',
+    '回调通知地址': 'notifyUrl',
+    '应用ID': 'appId',
+    '应用私钥': 'privateKey',
+    '支付宝公钥': 'alipayPublicKey',
+  }
+
   // 获取配置字段值
   const getConfigValue = (channel: PaymentChannel, fieldLabel: string): string => {
-    // 将中文标签映射到配置键
-    const keyMap: Record<string, string> = {
-      '公众号AppID': 'appId',
-      '商户号': 'mchId',
-      'API密钥': 'apiKey',
-      'API V3密钥': 'apiV3Key',
-      '证书序列号': 'serialNo',
-      '回调通知地址': 'notifyUrl',
-      '应用ID': 'appId',
-      '应用私钥': 'privateKey',
-      '支付宝公钥': 'alipayPublicKey',
-    }
-    const key = keyMap[fieldLabel] || fieldLabel
+    const key = configKeyMap[fieldLabel] || fieldLabel
     // 解析config，可能是字符串或对象
     const configObj = typeof channel.config === 'string' 
       ? JSON.parse(channel.config) 
@@ -185,22 +186,17 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
 
   // 设置配置字段值
   const setConfigValue = (fieldLabel: string, value: string) => {
-    const keyMap: Record<string, string> = {
-      '公众号AppID': 'appId',
-      '商户号': 'mchId',
-      'API密钥': 'apiKey',
-      'API V3密钥': 'apiV3Key',
-      '证书序列号': 'serialNo',
-      '回调通知地址': 'notifyUrl',
-      '应用ID': 'appId',
-      '应用私钥': 'privateKey',
-      '支付宝公钥': 'alipayPublicKey',
-    }
-    const key = keyMap[fieldLabel] || fieldLabel
+    const key = configKeyMap[fieldLabel] || fieldLabel
     setEditedConfig(prev => ({
       ...prev,
       [key]: value
     }))
+  }
+
+  // 获取编辑后的配置值（用于Input显示）
+  const getEditedConfigValue = (fieldLabel: string): string => {
+    const key = configKeyMap[fieldLabel] || fieldLabel
+    return editedConfig[key] ?? ''
   }
 
   if (loading) {
@@ -341,7 +337,7 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                   <Input
                     id={field.label}
                     type={field.type === 'password' && !showSecret[field.label] ? 'password' : 'text'}
-                    value={editedConfig[field.label] || getConfigValue(selectedChannel, field.label)}
+                    value={getEditedConfigValue(field.label) || getConfigValue(selectedChannel, field.label)}
                     onChange={(e) => setConfigValue(field.label, e.target.value)}
                     placeholder={field.placeholder}
                     className="bg-background/30"

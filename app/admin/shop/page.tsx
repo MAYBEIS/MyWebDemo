@@ -81,8 +81,36 @@ export default async function AdminShopPage() {
     }
   })
 
-  // 获取支付渠道列表
-  const paymentChannels = await prisma.payment_channels.findMany()
+  // 获取支付渠道列表，如果没有则初始化默认渠道
+  let paymentChannels = await prisma.payment_channels.findMany()
+  
+  if (paymentChannels.length === 0) {
+    // 初始化默认支付渠道
+    const defaultChannels = [
+      {
+        id: `channel_wechat_${Date.now()}`,
+        code: 'wechat',
+        name: '微信支付',
+        description: '支持微信扫码支付、H5支付等多种支付方式',
+        enabled: false,
+        config: '{}'
+      },
+      {
+        id: `channel_alipay_${Date.now() + 1}`,
+        code: 'alipay',
+        name: '支付宝',
+        description: '支持支付宝扫码支付、H5支付等多种支付方式',
+        enabled: false,
+        config: '{}'
+      }
+    ]
+    
+    for (const channel of defaultChannels) {
+      await prisma.payment_channels.create({ data: channel })
+    }
+    
+    paymentChannels = await prisma.payment_channels.findMany()
+  }
 
   return (
     <main className="min-h-screen bg-background noise-bg">
