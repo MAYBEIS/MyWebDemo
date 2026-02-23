@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, X, Terminal, ChevronRight, User, LogOut, Settings, Shield, ShoppingCart } from "lucide-react"
+import { Menu, X, Terminal, ChevronRight, User, LogOut, Settings, Shield, ShoppingCart, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useAuth, logout } from "@/lib/auth-store"
@@ -21,27 +21,39 @@ function getAvatarInitials(name: string, avatar: string | null): string {
     .slice(0, 2)
 }
 
-const navLinks = [
-  { href: "/", label: "首页" },
-  { href: "/blog", label: "博客" },
-  { href: "/projects", label: "项目" },
-  { href: "/shop", label: "商店" },
-  { href: "/trending", label: "热榜" },
-  { href: "/quiz", label: "每日挑战" },
-  { href: "/about", label: "关于" },
-  { href: "/guestbook", label: "留言板" },
+// 导航链接配置（包含设置键名）
+const navLinksConfig = [
+  { href: "/", label: "首页", settingKey: null },
+  { href: "/blog", label: "博客", settingKey: "section_blog_enabled" },
+  { href: "/projects", label: "项目", settingKey: null },
+  { href: "/shop", label: "商店", settingKey: "section_shop_enabled" },
+  { href: "/trending", label: "热榜", settingKey: "section_trending_enabled" },
+  { href: "/quiz", label: "每日挑战", settingKey: "section_quiz_enabled" },
+  { href: "/about", label: "关于", settingKey: null },
+  { href: "/guestbook", label: "留言板", settingKey: "section_guestbook_enabled" },
 ]
 
 // 默认网站标题
 const DEFAULT_SITE_TITLE = 'SysLog'
+
+// 分区开关默认值
+const DEFAULT_SECTION_SETTINGS: Record<string, boolean> = {
+  section_blog_enabled: true,
+  section_shop_enabled: true,
+  section_trending_enabled: true,
+  section_quiz_enabled: true,
+  section_guestbook_enabled: true,
+}
 
 export function NavHeader() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [siteTitle, setSiteTitle] = useState(DEFAULT_SITE_TITLE)
+  const [sectionSettings, setSectionSettings] = useState(DEFAULT_SECTION_SETTINGS)
+  const [isSettingsLoaded, setIsSettingsLoaded] = useState(false)
   const pathname = usePathname()
-  const { user, isLoggedIn } = useAuth()
+  const { user, isLoggedIn, isLoading: isAuthLoading } = useAuth()
 
   // 获取网站设置
   useEffect(() => {
@@ -49,15 +61,39 @@ export function NavHeader() {
       try {
         const response = await fetch('/api/settings/public')
         const data = await response.json()
-        if (data.success && data.data.site_title) {
-          setSiteTitle(data.data.site_title)
+        if (data.success && data.data) {
+          // 设置网站标题
+          if (data.data.site_title) {
+            setSiteTitle(data.data.site_title)
+          }
+          // 设置分区开关
+          const newSectionSettings = { ...DEFAULT_SECTION_SETTINGS }
+          Object.keys(DEFAULT_SECTION_SETTINGS).forEach(key => {
+            if (data.data[key] !== undefined) {
+              newSectionSettings[key] = data.data[key] !== 'false'
+            }
+          })
+          setSectionSettings(newSectionSettings)
         }
       } catch (error) {
         console.error('获取设置失败:', error)
+      } finally {
+        setIsSettingsLoaded(true)
       }
     }
     fetchSettings()
   }, [])
+
+  // 根据设置过滤导航链接
+  const navLinks = navLinksConfig.filter(link => {
+    // 如果没有设置键名，则始终显示
+    if (!link.settingKey) return true
+    // 根据设置决定是否显示
+    return sectionSettings[link.settingKey] !== false
+  })
+
+  // 是否正在加载（设置或认证状态）
+  const isHydrating = !isSettingsLoaded || isAuthLoading
 
   useEffect(() => {
     const handleScroll = () => {
@@ -106,25 +142,36 @@ export function NavHeader() {
 
         {/* Desktop Nav */}
         <div className="hidden items-center gap-0.5 md:flex">
-          {navLinks.map((link) => {
-            const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href))
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`relative px-3.5 py-2 text-sm transition-all duration-300 rounded-lg ${
-                  isActive
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {link.label}
-                {isActive && (
-                  <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 h-0.5 w-5 rounded-full bg-primary line-glow" />
-                )}
-              </Link>
-            )
-          })}
+          {isHydrating ? (
+            // 加载状态骨架屏
+            <>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="px-3.5 py-2">
+                  <div className="h-4 w-12 bg-muted/30 rounded animate-pulse" />
+                </div>
+              ))}
+            </>
+          ) : (
+            navLinks.map((link) => {
+              const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href))
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`relative px-3.5 py-2 text-sm transition-all duration-300 rounded-lg ${
+                    isActive
+                      ? "text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {link.label}
+                  {isActive && (
+                    <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 h-0.5 w-5 rounded-full bg-primary line-glow" />
+                  )}
+                </Link>
+              )
+            })
+          )}
         </div>
 
         {/* Desktop Auth / User */}
@@ -132,7 +179,13 @@ export function NavHeader() {
           {/* 主题切换 */}
           <ThemeToggle />
           
-          {isLoggedIn && user ? (
+          {isHydrating ? (
+            // 加载状态骨架屏
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-16 bg-muted/30 rounded animate-pulse" />
+              <div className="h-8 w-16 bg-muted/30 rounded animate-pulse" />
+            </div>
+          ) : isLoggedIn && user ? (
             <div className="relative">
               <button
                 onClick={(e) => { e.stopPropagation(); setShowUserMenu(!showUserMenu) }}
@@ -240,7 +293,8 @@ export function NavHeader() {
       >
         <div className="border-t border-border bg-background">
           <div className="flex flex-col px-6 py-4 gap-0.5">
-            {isLoggedIn && user && (
+            {/* 用户信息区域 */}
+            {!isHydrating && isLoggedIn && user && (
               <div className="flex items-center gap-3 px-3 py-3 mb-2 border-b border-border/30 pb-4">
                 <Avatar className="h-8 w-8 border border-border/40">
                   <AvatarFallback className="bg-primary/10 text-primary text-xs font-mono">{getAvatarInitials(user.name, user.avatar)}</AvatarFallback>
@@ -251,25 +305,46 @@ export function NavHeader() {
                 </div>
               </div>
             )}
-            {navLinks.map((link) => {
-              const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href))
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`flex items-center gap-2 px-3 py-3 text-sm rounded-lg transition-all duration-300 ${
-                    isActive
-                      ? "text-primary bg-primary/5"
-                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/30"
-                  }`}
-                >
-                  {isActive && <span className="h-1.5 w-1.5 rounded-full bg-primary line-glow" />}
-                  {link.label}
-                </Link>
-              )
-            })}
+            
+            {/* 导航链接 */}
+            {isHydrating ? (
+              // 加载状态骨架屏
+              <>
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="px-3 py-3">
+                    <div className="h-4 w-20 bg-muted/30 rounded animate-pulse" />
+                  </div>
+                ))}
+              </>
+            ) : (
+              navLinks.map((link) => {
+                const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href))
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`flex items-center gap-2 px-3 py-3 text-sm rounded-lg transition-all duration-300 ${
+                      isActive
+                        ? "text-primary bg-primary/5"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary/30"
+                    }`}
+                  >
+                    {isActive && <span className="h-1.5 w-1.5 rounded-full bg-primary line-glow" />}
+                    {link.label}
+                  </Link>
+                )
+              })
+            )}
+            
+            {/* 登录/注册按钮 */}
             <div className="flex gap-2.5 pt-4 border-t border-border/50 mt-2">
-              {isLoggedIn ? (
+              {isHydrating ? (
+                // 加载状态骨架屏
+                <>
+                  <div className="flex-1 h-8 bg-muted/30 rounded animate-pulse" />
+                  <div className="flex-1 h-8 bg-muted/30 rounded animate-pulse" />
+                </>
+              ) : isLoggedIn ? (
                 <>
                   <Link href="/profile" className="flex-1">
                     <Button variant="outline" size="sm" className="w-full border-border hover:border-primary/30">个人中心</Button>

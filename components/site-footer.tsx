@@ -11,10 +11,29 @@ const DEFAULT_SETTINGS = {
   github_url: '',
   twitter_url: '',
   weibo_url: '',
+  // 分区开关默认值
+  section_blog_enabled: 'true',
+  section_shop_enabled: 'true',
+  section_trending_enabled: 'true',
+  section_quiz_enabled: 'true',
+  section_guestbook_enabled: 'true',
 }
+
+// 导航链接配置（包含设置键名）
+const navLinksConfig = [
+  { href: "/", label: "首页", settingKey: null },
+  { href: "/blog", label: "博客", settingKey: "section_blog_enabled" },
+  { href: "/projects", label: "项目", settingKey: null },
+  { href: "/shop", label: "商店", settingKey: "section_shop_enabled" },
+  { href: "/trending", label: "热榜", settingKey: "section_trending_enabled" },
+  { href: "/quiz", label: "每日挑战", settingKey: "section_quiz_enabled" },
+  { href: "/about", label: "关于", settingKey: null },
+  { href: "/guestbook", label: "留言板", settingKey: "section_guestbook_enabled" },
+]
 
 export function SiteFooter() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
+  const [isSettingsLoaded, setIsSettingsLoaded] = useState(false)
 
   // 获取网站设置
   useEffect(() => {
@@ -27,10 +46,20 @@ export function SiteFooter() {
         }
       } catch (error) {
         console.error('获取设置失败:', error)
+      } finally {
+        setIsSettingsLoaded(true)
       }
     }
     fetchSettings()
   }, [])
+
+  // 根据设置过滤导航链接
+  const navLinks = navLinksConfig.filter(link => {
+    // 如果没有设置键名，则始终显示
+    if (!link.settingKey) return true
+    // 根据设置决定是否显示
+    return (settings as Record<string, string>)[link.settingKey] !== 'false'
+  })
 
   // 构建社交链接
   const socialLinks = []
@@ -67,24 +96,24 @@ export function SiteFooter() {
           <div>
             <h4 className="text-xs font-mono font-semibold text-foreground/60 mb-5 uppercase tracking-wider">导航</h4>
             <div className="flex flex-col gap-2.5">
-              {[
-                { href: "/", label: "首页" },
-                { href: "/blog", label: "博客" },
-                { href: "/projects", label: "项目" },
-                { href: "/shop", label: "商店" },
-                { href: "/trending", label: "热榜" },
-                { href: "/quiz", label: "每日挑战" },
-                { href: "/about", label: "关于" },
-                { href: "/guestbook", label: "留言板" },
-              ].map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="text-sm text-muted-foreground hover:text-primary transition-colors duration-300 w-fit"
-                >
-                  {link.label}
-                </Link>
-              ))}
+              {!isSettingsLoaded ? (
+                // 加载状态骨架屏
+                <>
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="h-4 w-16 bg-muted/30 rounded animate-pulse" />
+                  ))}
+                </>
+              ) : (
+                navLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="text-sm text-muted-foreground hover:text-primary transition-colors duration-300 w-fit"
+                  >
+                    {link.label}
+                  </Link>
+                ))
+              )}
             </div>
           </div>
 

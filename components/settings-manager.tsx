@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Settings, Save, RotateCcw, Image, MessageSquare, Users, Check, AlertCircle, Globe, Search, Shield, Link, Layers, Home, Terminal, Type } from "lucide-react"
+import { Settings, Save, RotateCcw, Image, MessageSquare, Users, Check, AlertCircle, Globe, Search, Shield, Link, Layers, Home, Terminal, Type, LayoutGrid, Store, TrendingUp, CalendarDays, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -481,6 +481,119 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
             checked={settings.allow_registration?.value === 'true'}
             onCheckedChange={(checked) => updateSetting('allow_registration', checked ? 'true' : 'false')}
           />
+        </div>
+      </div>
+
+      {/* 分区功能开关 */}
+      <div className="rounded-xl border border-border/40 bg-card/30 p-6 mb-6">
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+          <LayoutGrid className="h-5 w-5 text-primary" />
+          分区功能开关
+        </h2>
+        <p className="text-sm text-muted-foreground/60 mb-4">
+          控制网站各分区功能的开启与关闭，关闭后导航菜单中将不显示对应入口
+        </p>
+        
+        <div className="grid gap-5">
+          {/* 博客开关 */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-background/30 border border-border/30">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Globe className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <Label htmlFor="section_blog_enabled" className="font-medium">博客</Label>
+                <p className="text-xs text-muted-foreground/50">
+                  {settings.section_blog_enabled?.description || '博客文章列表与详情页面'}
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="section_blog_enabled"
+              checked={settings.section_blog_enabled?.value !== 'false'}
+              onCheckedChange={(checked) => updateSetting('section_blog_enabled', checked ? 'true' : 'false')}
+            />
+          </div>
+
+          {/* 商店开关 */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-background/30 border border-border/30">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Store className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <Label htmlFor="section_shop_enabled" className="font-medium">商店</Label>
+                <p className="text-xs text-muted-foreground/50">
+                  {settings.section_shop_enabled?.description || '商品展示与购买功能'}
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="section_shop_enabled"
+              checked={settings.section_shop_enabled?.value !== 'false'}
+              onCheckedChange={(checked) => updateSetting('section_shop_enabled', checked ? 'true' : 'false')}
+            />
+          </div>
+
+          {/* 热榜开关 */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-background/30 border border-border/30">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <TrendingUp className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <Label htmlFor="section_trending_enabled" className="font-medium">热榜</Label>
+                <p className="text-xs text-muted-foreground/50">
+                  {settings.section_trending_enabled?.description || '热门话题与趋势内容'}
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="section_trending_enabled"
+              checked={settings.section_trending_enabled?.value !== 'false'}
+              onCheckedChange={(checked) => updateSetting('section_trending_enabled', checked ? 'true' : 'false')}
+            />
+          </div>
+
+          {/* 每日挑战开关 */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-background/30 border border-border/30">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <CalendarDays className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <Label htmlFor="section_quiz_enabled" className="font-medium">每日挑战</Label>
+                <p className="text-xs text-muted-foreground/50">
+                  {settings.section_quiz_enabled?.description || '每日问答挑战功能'}
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="section_quiz_enabled"
+              checked={settings.section_quiz_enabled?.value !== 'false'}
+              onCheckedChange={(checked) => updateSetting('section_quiz_enabled', checked ? 'true' : 'false')}
+            />
+          </div>
+
+          {/* 留言板开关 */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-background/30 border border-border/30">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <MessageCircle className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <Label htmlFor="section_guestbook_enabled" className="font-medium">留言板</Label>
+                <p className="text-xs text-muted-foreground/50">
+                  {settings.section_guestbook_enabled?.description || '访客留言互动功能'}
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="section_guestbook_enabled"
+              checked={settings.section_guestbook_enabled?.value !== 'false'}
+              onCheckedChange={(checked) => updateSetting('section_guestbook_enabled', checked ? 'true' : 'false')}
+            />
+          </div>
         </div>
       </div>
 

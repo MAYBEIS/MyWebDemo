@@ -22,6 +22,12 @@ const PUBLIC_SETTINGS_KEYS = [
   'github_url',
   'twitter_url',
   'weibo_url',
+  // 分区功能开关
+  'section_blog_enabled',
+  'section_shop_enabled',
+  'section_trending_enabled',
+  'section_quiz_enabled',
+  'section_guestbook_enabled',
 ]
 
 // 默认值
@@ -45,6 +51,12 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   github_url: '',
   twitter_url: '',
   weibo_url: '',
+  // 分区功能开关（默认全部开启）
+  section_blog_enabled: 'true',
+  section_shop_enabled: 'true',
+  section_trending_enabled: 'true',
+  section_quiz_enabled: 'true',
+  section_guestbook_enabled: 'true',
 }
 
 /**
