@@ -86,10 +86,10 @@ export function NavHeader() {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 bg-background border-b border-border ${
         isScrolled
-          ? "glass-strong border-b border-border/50 shadow-lg shadow-background/20"
-          : "glass border-b border-border/30"
+          ? "shadow-lg shadow-background/20"
+          : ""
       }`}
     >
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 h-16">
@@ -238,7 +238,7 @@ export function NavHeader() {
           isMobileMenuOpen ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
         }`}
       >
-        <div className="border-t border-border/50 glass-strong">
+        <div className="border-t border-border bg-background">
           <div className="flex flex-col px-6 py-4 gap-0.5">
             {isLoggedIn && user && (
               <div className="flex items-center gap-3 px-3 py-3 mb-2 border-b border-border/30 pb-4">
