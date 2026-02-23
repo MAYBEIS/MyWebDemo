@@ -86,11 +86,22 @@ export function SiteFooter() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 group-hover:bg-primary/15 transition-all duration-300">
                 <Terminal className="h-4 w-4 text-primary" />
               </div>
-              <span className="font-mono text-lg font-bold text-foreground group-hover:text-primary transition-colors duration-300">{settings.site_title}</span>
+              {!isSettingsLoaded ? (
+                <div className="h-6 w-20 bg-muted/30 rounded animate-pulse" />
+              ) : (
+                <span className="font-mono text-lg font-bold text-foreground group-hover:text-primary transition-colors duration-300">{settings.site_title}</span>
+              )}
             </Link>
-            <p className="text-sm text-muted-foreground/70 leading-relaxed">
-              {settings.site_description}
-            </p>
+            {!isSettingsLoaded ? (
+              <div className="space-y-2">
+                <div className="h-4 w-full bg-muted/30 rounded animate-pulse" />
+                <div className="h-4 w-3/4 bg-muted/30 rounded animate-pulse" />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground/70 leading-relaxed">
+                {settings.site_description}
+              </p>
+            )}
           </div>
 
           <div>

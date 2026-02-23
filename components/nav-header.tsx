@@ -135,9 +135,13 @@ export function NavHeader() {
             <Terminal className="h-4 w-4 text-primary transition-transform duration-300 group-hover:scale-110" />
             <div className="absolute inset-0 rounded-lg bg-primary/5 animate-glow-pulse opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
-          <span className="font-mono text-lg font-bold tracking-tight text-foreground group-hover:text-primary transition-colors duration-300">
-            {siteTitle}
-          </span>
+          {isHydrating ? (
+            <div className="h-6 w-20 bg-muted/30 rounded animate-pulse" />
+          ) : (
+            <span className="font-mono text-lg font-bold tracking-tight text-foreground group-hover:text-primary transition-colors duration-300">
+              {siteTitle}
+            </span>
+          )}
         </Link>
 
         {/* Desktop Nav */}
