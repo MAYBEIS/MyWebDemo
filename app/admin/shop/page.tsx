@@ -84,39 +84,44 @@ export default async function AdminShopPage() {
   // 获取支付渠道列表，如果没有则初始化默认渠道
   let paymentChannels = await prisma.payment_channels.findMany()
   
-  if (paymentChannels.length === 0) {
-    // 初始化默认支付渠道
-    const defaultChannels = [
-      {
-        id: `channel_wechat_${Date.now()}`,
-        code: 'wechat',
-        name: '微信支付',
-        description: '支持微信扫码支付、H5支付等多种支付方式（需要商户资质）',
-        enabled: false,
-        config: '{}'
-      },
-      {
-        id: `channel_alipay_${Date.now() + 1}`,
-        code: 'alipay',
-        name: '支付宝',
-        description: '支持支付宝扫码支付、H5支付等多种支付方式（需要商户资质）',
-        enabled: false,
-        config: '{}'
-      },
-      {
-        id: `channel_epay_${Date.now() + 2}`,
-        code: 'epay',
-        name: '易支付',
-        description: '第四方聚合支付平台，支持微信和支付宝，个人开发者友好，无需商户资质',
-        enabled: false,
-        config: '{}'
-      }
-    ]
-    
-    for (const channel of defaultChannels) {
-      await prisma.payment_channels.create({ data: channel })
+  // 默认支付渠道定义
+  const defaultChannels = [
+    {
+      code: 'wechat',
+      name: '微信支付',
+      description: '支持微信扫码支付、H5支付等多种支付方式（需要商户资质）',
+      enabled: false,
+      config: '{}'
+    },
+    {
+      code: 'alipay',
+      name: '支付宝',
+      description: '支持支付宝扫码支付、H5支付等多种支付方式（需要商户资质）',
+      enabled: false,
+      config: '{}'
+    },
+    {
+      code: 'xunhupay',
+      name: '虎皮椒支付',
+      description: '第三方聚合支付平台，支持微信和支付宝，个人开发者友好，无需商户资质',
+      enabled: false,
+      config: '{}'
     }
-    
+  ]
+  
+  // 检查是否有缺失的渠道，如果有则添加
+  const existingCodes = paymentChannels.map(ch => ch.code)
+  const missingChannels = defaultChannels.filter(ch => !existingCodes.includes(ch.code))
+  
+  if (missingChannels.length > 0) {
+    for (const channel of missingChannels) {
+      await prisma.payment_channels.create({
+        data: {
+          id: `channel_${channel.code}_${Date.now()}`,
+          ...channel
+        }
+      })
+    }
     paymentChannels = await prisma.payment_channels.findMany()
   }
 

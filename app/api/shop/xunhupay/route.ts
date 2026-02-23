@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth-service'
 import {
-  getEpayConfigFromDB,
-  getEpayConfig,
-  createEpayOrder,
-  queryEpayOrder,
-  formatMoney,
-  verifyEpaySign
-} from '@/lib/epay'
+  getXunhuPayConfigFromDB,
+  getXunhuPayConfig,
+  createXunhuPayOrder,
+  queryXunhuPayOrder,
+  formatMoney
+} from '@/lib/xunhupay'
 
 // 测试模式配置
 const TEST_MODE = process.env.PAYMENT_TEST_MODE === 'true'
@@ -18,13 +17,13 @@ const TEST_AUTO_SUCCESS_MS = parseInt(process.env.PAYMENT_TEST_AUTO_SUCCESS_MS |
 const testPaymentStatus = new Map<string, { paid: boolean; createdAt: number; type: string }>()
 
 /**
- * 创建易支付订单
- * POST /api/shop/epay
+ * 创建虎皮椒支付订单
+ * POST /api/shop/xunhupay
  * 
  * 请求体：
  * {
  *   orderId: string,      // 系统订单ID
- *   payType: 'alipay' | 'wxpay'  // 支付方式
+ *   payType: 'wechat' | 'alipay'  // 支付方式
  * }
  */
 export async function POST(request: NextRequest) {
@@ -47,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { orderId, payType = 'alipay' } = body
+    const { orderId, payType = 'wechat' } = body
 
     if (!orderId) {
       return NextResponse.json(
@@ -57,7 +56,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 验证支付方式
-    if (!['alipay', 'wxpay', 'qqpay'].includes(payType)) {
+    if (!['wechat', 'alipay'].includes(payType)) {
       return NextResponse.json(
         { success: false, error: '不支持的支付方式' },
         { status: 400 }
@@ -97,7 +96,7 @@ export async function POST(request: NextRequest) {
 
     // 测试模式：返回模拟的支付链接
     if (TEST_MODE) {
-      console.log('[测试模式] 创建模拟易支付订单:', order.orderNo, '支付方式:', payType)
+      console.log('[测试模式] 创建模拟虎皮椒支付订单:', order.orderNo, '支付方式:', payType)
       
       // 记录测试支付状态
       testPaymentStatus.set(order.orderNo, {
@@ -110,7 +109,7 @@ export async function POST(request: NextRequest) {
       await prisma.orders.update({
         where: { id: orderId },
         data: {
-          paymentMethod: `epay_${payType}`,
+          paymentMethod: `xunhupay_${payType}`,
           remark: '测试模式支付'
         }
       })
@@ -127,46 +126,36 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // 非测试模式：需要真实的易支付配置
+    // 非测试模式：需要真实的虎皮椒支付配置
     // 优先从数据库获取配置，其次从环境变量获取
-    let config = await getEpayConfigFromDB()
+    let config = await getXunhuPayConfigFromDB()
     if (!config) {
-      config = getEpayConfig()
+      config = getXunhuPayConfig()
     }
     
     if (!config) {
       return NextResponse.json(
-        { success: false, error: '易支付未配置，请在后台配置支付渠道' },
+        { success: false, error: '虎皮椒支付未配置，请在后台配置支付渠道' },
         { status: 500 }
       )
     }
 
-    // 获取客户端IP
-    const clientIp = request.headers.get('x-forwarded-for') || 
-                     request.headers.get('x-real-ip') || 
-                     '127.0.0.1'
-
     // 构建回调URL
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ''
-    const notifyUrl = `${siteUrl}/api/shop/epay/notify`
-    const returnUrl = `${siteUrl}/orders?pay_result=success`
+    config.notifyUrl = `${siteUrl}/api/shop/xunhupay/notify`
 
-    // 调用易支付创建订单
-    const result = await createEpayOrder(config, {
-      type: payType,
-      outTradeNo: order.orderNo,
-      name: order.products?.name || '商品购买',
-      money: formatMoney(order.amount),
-      notifyUrl,
-      returnUrl,
-      clientIp,
-      param: order.id  // 附加订单ID
-    })
+    // 调用虎皮椒创建订单
+    const result = await createXunhuPayOrder(config, {
+      trade_order_id: order.orderNo,
+      total_fee: order.amount,
+      title: order.products?.name || '商品购买',
+      type: 'NATIVE'  // 扫码支付
+    }, payType)
 
-    if (result.code !== 1) {
-      console.error('易支付创建订单失败:', result.msg)
+    if (result.err_code !== 0) {
+      console.error('虎皮椒创建订单失败:', result.err_msg)
       return NextResponse.json(
-        { success: false, error: result.msg || '创建支付订单失败' },
+        { success: false, error: result.err_msg || '创建支付订单失败' },
         { status: 500 }
       )
     }
@@ -175,22 +164,22 @@ export async function POST(request: NextRequest) {
     await prisma.orders.update({
       where: { id: orderId },
       data: {
-        paymentMethod: `epay_${payType}`,
-        remark: `易支付订单号: ${result.tradeNo || ''}`
+        paymentMethod: `xunhupay_${payType}`,
+        remark: `虎皮椒订单号: ${result.order_id || ''}`
       }
     })
 
     return NextResponse.json({
       success: true,
       data: {
-        payUrl: result.payUrl,
-        payQrcode: result.payQrcode,
-        tradeNo: result.tradeNo,
+        payUrl: result.url,
+        payQrcode: result.url_qrcode,
+        orderId: result.order_id,
         orderNo: order.orderNo
       }
     })
   } catch (error) {
-    console.error('创建易支付订单失败:', error)
+    console.error('创建虎皮椒支付订单失败:', error)
     return NextResponse.json(
       { success: false, error: '创建支付订单失败' },
       { status: 500 }
@@ -199,8 +188,8 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * 查询易支付订单状态
- * GET /api/shop/epay?orderNo=xxx
+ * 查询虎皮椒支付订单状态
+ * GET /api/shop/xunhupay?orderNo=xxx
  */
 export async function GET(request: NextRequest) {
   try {
@@ -271,7 +260,7 @@ export async function GET(request: NextRequest) {
         testPaymentStatus.set(orderNo, {
           paid: false,
           createdAt: Date.now(),
-          type: 'alipay'
+          type: 'wechat'
         })
       }
       
@@ -284,7 +273,7 @@ export async function GET(request: NextRequest) {
         console.log('[测试模式] 自动支付成功:', orderNo)
         
         // 更新订单状态
-        await updateOrderPaid(order.id, `test_epay_${Date.now()}`)
+        await updateOrderPaid(order.id, `test_xunhupay_${Date.now()}`)
         
         return NextResponse.json({
           success: true,
@@ -310,46 +299,46 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // 非测试模式：查询易支付订单状态
-    let config = await getEpayConfigFromDB()
+    // 非测试模式：查询虎皮椒订单状态
+    let config = await getXunhuPayConfigFromDB()
     if (!config) {
-      config = getEpayConfig()
+      config = getXunhuPayConfig()
     }
     
     if (!config) {
       return NextResponse.json(
-        { success: false, error: '易支付未配置' },
+        { success: false, error: '虎皮椒支付未配置' },
         { status: 500 }
       )
     }
 
-    // 查询易支付订单状态
-    const result = await queryEpayOrder(config, orderNo)
+    // 查询虎皮椒订单状态
+    const result = await queryXunhuPayOrder(config, orderNo)
 
-    if (result.code !== 1) {
+    if (result.err_code !== 0) {
       return NextResponse.json(
-        { success: false, error: result.msg || '查询订单失败' },
+        { success: false, error: result.err_msg || '查询订单失败' },
         { status: 500 }
       )
     }
 
-    const tradeStatus = result.trade_status
+    const tradeStatus = result.status
 
     // 如果支付成功，更新订单状态
-    if (tradeStatus === 'TRADE_SUCCESS') {
-      await updateOrderPaid(order.id, result.trade_no)
+    if (tradeStatus === 'OD') {
+      await updateOrderPaid(order.id, result.out_trade_order)
     }
 
     return NextResponse.json({
       success: true,
       data: {
-        tradeState: tradeStatus === 'TRADE_SUCCESS' ? 'SUCCESS' : 'NOTPAY',
-        tradeStateDesc: tradeStatus === 'TRADE_SUCCESS' ? '支付成功' : '等待支付',
-        orderStatus: tradeStatus === 'TRADE_SUCCESS' ? 'paid' : order.status
+        tradeState: tradeStatus === 'OD' ? 'SUCCESS' : 'NOTPAY',
+        tradeStateDesc: tradeStatus === 'OD' ? '支付成功' : '等待支付',
+        orderStatus: tradeStatus === 'OD' ? 'paid' : order.status
       }
     })
   } catch (error) {
-    console.error('查询易支付订单失败:', error)
+    console.error('查询虎皮椒订单失败:', error)
     return NextResponse.json(
       { success: false, error: '查询订单失败' },
       { status: 500 }
@@ -381,7 +370,7 @@ async function updateOrderPaid(orderId: string, transactionId: string) {
       status: 'paid',
       paymentTime: new Date(),
       updatedAt: new Date(),
-      remark: `易支付交易号: ${transactionId}`
+      remark: `虎皮椒交易号: ${transactionId}`
     }
 
     // 如果产品需要密钥（库存不是无限），分配密钥

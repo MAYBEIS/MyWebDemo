@@ -9,7 +9,6 @@ import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -18,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Loader2, CreditCard, Settings, Check, AlertCircle, Eye, EyeOff, Save, ExternalLink, HelpCircle, TestTube } from 'lucide-react'
+import { Loader2, CreditCard, Settings, AlertCircle, Eye, EyeOff, Save, HelpCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
 // 支付渠道配置类型
@@ -47,33 +46,24 @@ const channelConfigFields: Record<string, { label: string; type: string; placeho
     { label: '支付宝公钥', type: 'password', placeholder: '支付宝公钥内容', required: true },
     { label: '回调通知地址', type: 'text', placeholder: 'https://your-domain.com/api/shop/alipay/notify', required: true },
   ],
-  epay: [
-    { label: '商户ID', type: 'text', placeholder: '1000', required: true },
-    { label: '商户密钥', type: 'password', placeholder: '商户密钥', required: true },
-    { label: '支付网关', type: 'text', placeholder: 'https://pay.example.com', required: true },
-    { label: '异步通知地址', type: 'text', placeholder: 'https://your-domain.com/api/shop/epay/notify', required: false },
-    { label: '同步跳转地址', type: 'text', placeholder: 'https://your-domain.com/orders', required: false },
+  xunhupay: [
+    { label: 'AppID', type: 'text', placeholder: '虎皮椒AppID', required: true },
+    { label: 'AppSecret', type: 'password', placeholder: '虎皮椒密钥', required: true },
+    { label: '异步通知地址', type: 'text', placeholder: 'https://your-domain.com/api/shop/xunhupay/notify', required: false },
   ]
 }
 
-// 易支付支持的支付方式
-const EPAY_PAYMENT_TYPES = [
+// 虎皮椒支持的支付方式
+const XUNHUPAY_PAYMENT_TYPES = [
+  { code: 'wechat', name: '微信支付', icon: '💚' },
   { code: 'alipay', name: '支付宝', icon: '💳' },
-  { code: 'wxpay', name: '微信支付', icon: '💚' },
-  { code: 'qqpay', name: 'QQ钱包', icon: '🐧' },
-]
-
-// 易支付支付类型
-const EPAY_PAY_MODES = [
-  { code: 'jump', name: '跳转支付', description: '跳转到易支付页面完成支付' },
-  { code: 'qrcode', name: '二维码支付', description: '显示二维码，用户扫码支付' },
 ]
 
 // 支付渠道名称映射
 const channelNames: Record<string, string> = {
   wechat: '微信支付',
   alipay: '支付宝',
-  epay: '易支付'
+  xunhupay: '虎皮椒支付'
 }
 
 interface PaymentChannelManagerProps {
@@ -88,10 +78,8 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
   const [selectedChannel, setSelectedChannel] = useState<PaymentChannel | null>(null)
   const [editedConfig, setEditedConfig] = useState<Record<string, string>>({})
   const [showSecret, setShowSecret] = useState<Record<string, boolean>>({})
-  const [testing, setTesting] = useState(false)
-  // 易支付特有配置状态
-  const [epayPaymentTypes, setEpayPaymentTypes] = useState<string[]>(['alipay', 'wxpay'])
-  const [epayPayMode, setEpayPayMode] = useState<string>('jump')
+  // 虎皮椒特有配置状态
+  const [xunhupayPaymentTypes, setXunhupayPaymentTypes] = useState<string[]>(['wechat', 'alipay'])
 
   useEffect(() => {
     if (!initialChannels) {
@@ -148,16 +136,13 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
       : channel.config
     setEditedConfig({ ...configObj })
     
-    // 加载易支付特有配置
-    if (channel.code === 'epay') {
+    // 加载虎皮椒特有配置
+    if (channel.code === 'xunhupay') {
       // 加载启用的支付方式
       const enabledTypes = configObj.enabledPaymentTypes 
         ? configObj.enabledPaymentTypes.split(',').filter((t: string) => t)
-        : ['alipay', 'wxpay']
-      setEpayPaymentTypes(enabledTypes)
-      
-      // 加载支付模式
-      setEpayPayMode(configObj.payMode || 'jump')
+        : ['wechat', 'alipay']
+      setXunhupayPaymentTypes(enabledTypes)
     }
     
     setConfigDialogOpen(true)
@@ -172,10 +157,9 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
       // 构建最终配置
       const finalConfig = { ...editedConfig }
       
-      // 如果是易支付，添加特有配置
-      if (selectedChannel.code === 'epay') {
-        finalConfig.enabledPaymentTypes = epayPaymentTypes.join(',')
-        finalConfig.payMode = epayPayMode
+      // 如果是虎皮椒，添加特有配置
+      if (selectedChannel.code === 'xunhupay') {
+        finalConfig.enabledPaymentTypes = xunhupayPaymentTypes.join(',')
       }
 
       const response = await fetch('/api/shop/payment-channels', {
@@ -203,42 +187,9 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
     }
   }
 
-  // 测试易支付连接
-  const handleTestEpayConnection = async () => {
-    if (!editedConfig.pid || !editedConfig.key || !editedConfig.gateway) {
-      toast.error('请先填写商户ID、商户密钥和支付网关')
-      return
-    }
-
-    setTesting(true)
-    try {
-      const response = await fetch('/api/shop/epay/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pid: editedConfig.pid,
-          key: editedConfig.key,
-          gateway: editedConfig.gateway
-        })
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        toast.success('连接测试成功！易支付配置有效')
-      } else {
-        toast.error(data.error || '连接测试失败，请检查配置')
-      }
-    } catch (error) {
-      console.error('测试连接失败:', error)
-      toast.error('测试连接失败，请检查网络或配置')
-    } finally {
-      setTesting(false)
-    }
-  }
-
-  // 切换易支付支付方式
-  const toggleEpayPaymentType = (type: string) => {
-    setEpayPaymentTypes(prev => {
+  // 切换虎皮椒支付方式
+  const toggleXunhupayPaymentType = (type: string) => {
+    setXunhupayPaymentTypes(prev => {
       if (prev.includes(type)) {
         // 至少保留一个支付方式
         if (prev.length <= 1) {
@@ -271,11 +222,9 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
     '应用ID': 'appId',
     '应用私钥': 'privateKey',
     '支付宝公钥': 'alipayPublicKey',
-    '商户ID': 'pid',
-    '商户密钥': 'key',
-    '支付网关': 'gateway',
+    'AppID': 'appid',
+    'AppSecret': 'appSecret',
     '异步通知地址': 'notifyUrl',
-    '同步跳转地址': 'returnUrl',
   }
 
   // 获取配置字段值
@@ -322,7 +271,7 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
             支付渠道配置
           </CardTitle>
           <CardDescription>
-            配置和管理支付渠道，支持微信支付、支付宝等
+            配置和管理支付渠道，支持微信支付、支付宝、虎皮椒支付等
           </CardDescription>
         </CardHeader>
         
@@ -391,9 +340,9 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
               <div className="text-sm text-muted-foreground">
                 <p className="font-medium text-foreground mb-1">配置说明</p>
                 <ul className="list-disc list-inside space-y-1 text-xs">
-                  <li>微信支付/支付宝需要申请商户平台账号并完成企业认证</li>
-                  <li>易支付是第四方聚合支付平台，个人开发者友好，无需商户资质</li>
-                  <li>易支付支持微信和支付宝两种支付方式，只需配置一套参数</li>
+                  <li>微信支付/支付宝官方接口需要申请商户平台账号并完成企业认证</li>
+                  <li>虎皮椒支付是第三方聚合支付平台，支持微信和支付宝，个人开发者友好</li>
+                  <li>虎皮椒支付只需配置AppID和AppSecret即可使用</li>
                   <li>回调通知地址必须是外网可访问的HTTPS地址</li>
                   <li>配置信息将加密存储在数据库中，建议定期更换密钥</li>
                 </ul>
@@ -405,7 +354,7 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
 
       {/* 配置对话框 */}
       <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
-        <DialogContent className={selectedChannel?.code === 'epay' ? 'max-w-2xl' : 'max-w-lg'}>
+        <DialogContent className={selectedChannel?.code === 'xunhupay' ? 'max-w-2xl' : 'max-w-lg'}>
           <DialogHeader>
             <DialogTitle>
               配置 {selectedChannel && (channelNames[selectedChannel.code] || selectedChannel.name)}
@@ -415,8 +364,8 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
             </DialogDescription>
           </DialogHeader>
 
-          {selectedChannel?.code === 'epay' ? (
-            // 易支付专用配置页面
+          {selectedChannel?.code === 'xunhupay' ? (
+            // 虎皮椒专用配置页面
             <div className="space-y-6 py-4">
               <Tabs defaultValue="basic" className="w-full">
                 <TabsList className="grid w-full grid-cols-3">
@@ -427,7 +376,7 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                 
                 {/* 基本配置 */}
                 <TabsContent value="basic" className="space-y-4 mt-4">
-                  {(channelConfigFields.epay || []).map((field) => (
+                  {(channelConfigFields.xunhupay || []).map((field) => (
                     <div key={field.label} className="grid gap-2">
                       <div className="flex items-center justify-between">
                         <Label htmlFor={field.label}>
@@ -459,26 +408,6 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                       />
                     </div>
                   ))}
-                  
-                  {/* 测试连接按钮 */}
-                  <div className="flex items-center gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleTestEpayConnection}
-                      disabled={testing}
-                    >
-                      {testing ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      ) : (
-                        <TestTube className="h-4 w-4 mr-2" />
-                      )}
-                      测试连接
-                    </Button>
-                    <span className="text-xs text-muted-foreground">
-                      验证配置是否正确
-                    </span>
-                  </div>
                 </TabsContent>
                 
                 {/* 支付方式配置 */}
@@ -491,63 +420,24 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                       </p>
                     </div>
                     
-                    <div className="grid grid-cols-3 gap-3">
-                      {EPAY_PAYMENT_TYPES.map((type) => (
+                    <div className="grid grid-cols-2 gap-3">
+                      {XUNHUPAY_PAYMENT_TYPES.map((type) => (
                         <div
                           key={type.code}
                           className={`
                             flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors
-                            ${epayPaymentTypes.includes(type.code) 
+                            ${xunhupayPaymentTypes.includes(type.code) 
                               ? 'border-primary bg-primary/10' 
                               : 'border-border hover:border-primary/50'}
                           `}
-                          onClick={() => toggleEpayPaymentType(type.code)}
+                          onClick={() => toggleXunhupayPaymentType(type.code)}
                         >
                           <Checkbox
-                            checked={epayPaymentTypes.includes(type.code)}
-                            onCheckedChange={() => toggleEpayPaymentType(type.code)}
+                            checked={xunhupayPaymentTypes.includes(type.code)}
+                            onCheckedChange={() => toggleXunhupayPaymentType(type.code)}
                           />
                           <span className="text-lg">{type.icon}</span>
                           <span className="font-medium">{type.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                    
-                    <div className="h-px bg-border my-4" />
-                    
-                    <div>
-                      <Label className="text-base font-medium">支付模式</Label>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        选择用户支付时的展示方式
-                      </p>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      {EPAY_PAY_MODES.map((mode) => (
-                        <div
-                          key={mode.code}
-                          className={`
-                            flex flex-col p-3 rounded-lg border cursor-pointer transition-colors
-                            ${epayPayMode === mode.code 
-                              ? 'border-primary bg-primary/10' 
-                              : 'border-border hover:border-primary/50'}
-                          `}
-                          onClick={() => setEpayPayMode(mode.code)}
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className={`
-                              w-4 h-4 rounded-full border-2 flex items-center justify-center
-                              ${epayPayMode === mode.code ? 'border-primary' : 'border-muted-foreground'}
-                            `}>
-                              {epayPayMode === mode.code && (
-                                <div className="w-2 h-2 rounded-full bg-primary" />
-                              )}
-                            </div>
-                            <span className="font-medium">{mode.name}</span>
-                          </div>
-                          <span className="text-xs text-muted-foreground mt-1 ml-6">
-                            {mode.description}
-                          </span>
                         </div>
                       ))}
                     </div>
@@ -560,22 +450,21 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                     <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
                       <h4 className="font-medium flex items-center gap-2 mb-2">
                         <HelpCircle className="h-4 w-4 text-primary" />
-                        什么是易支付？
+                        什么是虎皮椒支付？
                       </h4>
                       <p className="text-sm text-muted-foreground">
-                        易支付是第四方聚合支付平台，支持微信支付、支付宝、QQ钱包等多种支付方式。
-                        相比官方支付接口，易支付对个人开发者更友好，无需企业资质即可接入。
+                        虎皮椒支付（XunhuPay）是第三方聚合支付平台，支持微信支付、支付宝等多种支付方式。
+                        相比官方支付接口，虎皮椒对个人开发者更友好，无需企业资质即可接入。
                       </p>
                     </div>
                     
                     <div className="p-4 rounded-lg bg-muted/50">
                       <h4 className="font-medium mb-2">如何获取配置信息？</h4>
                       <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
-                        <li>访问易支付平台官网并注册账号</li>
-                        <li>在商户后台获取商户ID（PID）</li>
-                        <li>在商户后台设置商户密钥（KEY）</li>
-                        <li>复制支付网关地址（通常是平台域名）</li>
-                        <li>配置异步通知地址，格式为：您的域名/api/shop/epay/notify</li>
+                        <li>访问虎皮椒官网 (https://www.xunhupay.com) 并注册账号</li>
+                        <li>在商户后台创建应用获取AppID</li>
+                        <li>在应用设置中获取AppSecret（密钥）</li>
+                        <li>配置异步通知地址，格式为：您的域名/api/shop/xunhupay/notify</li>
                       </ol>
                     </div>
                     
@@ -583,10 +472,9 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                       <h4 className="font-medium text-yellow-600 dark:text-yellow-400 mb-2">⚠️ 注意事项</h4>
                       <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
                         <li>异步通知地址必须是外网可访问的HTTPS地址</li>
-                        <li>商户密钥请妥善保管，不要泄露给他人</li>
-                        <li>建议定期更换商户密钥以提高安全性</li>
-                        <li>部分易支付平台可能不支持所有支付方式</li>
-                        <li>请选择信誉良好的易支付平台，避免资金风险</li>
+                        <li>AppSecret请妥善保管，不要泄露给他人</li>
+                        <li>建议定期更换密钥以提高安全性</li>
+                        <li>请选择信誉良好的支付平台，避免资金风险</li>
                       </ul>
                     </div>
                     

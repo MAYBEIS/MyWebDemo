@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import {
-  getEpayConfigFromDB,
-  getEpayConfig,
-  verifyEpaySign,
-  generateEpaySuccessResponse,
-  generateEpayFailResponse,
+  getXunhuPayConfigFromDB,
+  getXunhuPayConfig,
+  verifyHash,
+  generateXunhuPaySuccessResponse,
+  generateXunhuPayFailResponse,
   getPaymentTypeName
-} from '@/lib/epay'
+} from '@/lib/xunhupay'
 
 /**
- * 易支付异步通知回调
- * POST /api/shop/epay/notify
+ * 虎皮椒支付异步通知回调
+ * POST /api/shop/xunhupay/notify
  * 
- * 易支付会在用户支付成功后调用此接口通知商户
+ * 虎皮椒会在用户支付成功后调用此接口通知商户
  */
 export async function POST(request: NextRequest) {
   try {
@@ -25,25 +25,26 @@ export async function POST(request: NextRequest) {
       data[key] = value.toString()
     })
 
-    console.log('[易支付回调] 收到通知:', JSON.stringify(data))
+    console.log('[虎皮椒回调] 收到通知:', JSON.stringify(data))
 
     // 解析回调数据
     const {
-      trade_no: tradeNo,
-      out_trade_no: outTradeNo,
-      type: payType,
-      name: productName,
-      money,
-      trade_status: tradeStatus,
-      param,
-      sign,
-      sign_type: signType
+      appid,
+      trade_order_id: tradeOrderId,
+      out_trade_order: outTradeOrder,
+      total_fee: totalFee,
+      status,
+      title,
+      time,
+      hash,
+      nonce_str,
+      type
     } = data
 
     // 验证必要参数
-    if (!tradeNo || !outTradeNo || !tradeStatus || !sign) {
-      console.error('[易支付回调] 参数不完整')
-      return new NextResponse(generateEpayFailResponse('参数不完整'), {
+    if (!tradeOrderId || !status || !hash) {
+      console.error('[虎皮椒回调] 参数不完整')
+      return new NextResponse(generateXunhuPayFailResponse('参数不完整'), {
         status: 200,
         headers: { 'Content-Type': 'text/plain' }
       })
@@ -51,12 +52,12 @@ export async function POST(request: NextRequest) {
 
     // 查询本地订单
     const order = await prisma.orders.findFirst({
-      where: { orderNo: outTradeNo }
+      where: { orderNo: tradeOrderId }
     })
 
     if (!order) {
-      console.error('[易支付回调] 订单不存在:', outTradeNo)
-      return new NextResponse(generateEpayFailResponse('订单不存在'), {
+      console.error('[虎皮椒回调] 订单不存在:', tradeOrderId)
+      return new NextResponse(generateXunhuPayFailResponse('订单不存在'), {
         status: 200,
         headers: { 'Content-Type': 'text/plain' }
       })
@@ -64,40 +65,40 @@ export async function POST(request: NextRequest) {
 
     // 如果订单已支付，直接返回成功（防止重复通知）
     if (order.status === 'paid' || order.status === 'completed') {
-      console.log('[易支付回调] 订单已处理:', outTradeNo)
-      return new NextResponse(generateEpaySuccessResponse(), {
+      console.log('[虎皮椒回调] 订单已处理:', tradeOrderId)
+      return new NextResponse(generateXunhuPaySuccessResponse(), {
         status: 200,
         headers: { 'Content-Type': 'text/plain' }
       })
     }
 
-    // 获取易支付配置验证签名
-    let config = await getEpayConfigFromDB()
+    // 获取虎皮椒配置验证签名
+    let config = await getXunhuPayConfigFromDB()
     if (!config) {
-      config = getEpayConfig()
+      config = getXunhuPayConfig()
     }
 
     if (!config) {
-      console.error('[易支付回调] 未找到易支付配置')
-      return new NextResponse(generateEpayFailResponse('配置错误'), {
+      console.error('[虎皮椒回调] 未找到虎皮椒配置')
+      return new NextResponse(generateXunhuPayFailResponse('配置错误'), {
         status: 200,
         headers: { 'Content-Type': 'text/plain' }
       })
     }
 
     // 验证签名
-    if (!verifyEpaySign(data, config.key)) {
-      console.error('[易支付回调] 签名验证失败')
-      return new NextResponse(generateEpayFailResponse('签名验证失败'), {
+    if (!verifyHash(data, config.appSecret)) {
+      console.error('[虎皮椒回调] 签名验证失败')
+      return new NextResponse(generateXunhuPayFailResponse('签名验证失败'), {
         status: 200,
         headers: { 'Content-Type': 'text/plain' }
       })
     }
 
-    // 验证支付状态
-    if (tradeStatus !== 'TRADE_SUCCESS') {
-      console.log('[易支付回调] 支付未成功:', tradeStatus)
-      return new NextResponse(generateEpayFailResponse('支付未成功'), {
+    // 验证支付状态 (OD表示支付成功)
+    if (status !== 'OD') {
+      console.log('[虎皮椒回调] 支付未成功:', status)
+      return new NextResponse(generateXunhuPayFailResponse('支付未成功'), {
         status: 200,
         headers: { 'Content-Type': 'text/plain' }
       })
@@ -105,27 +106,30 @@ export async function POST(request: NextRequest) {
 
     // 验证金额（防止金额篡改）
     const orderAmount = order.amount.toFixed(2)
-    if (money !== orderAmount) {
-      console.error('[易支付回调] 金额不匹配:', money, 'vs', orderAmount)
-      return new NextResponse(generateEpayFailResponse('金额不匹配'), {
+    if (totalFee !== orderAmount) {
+      console.error('[虎皮椒回调] 金额不匹配:', totalFee, 'vs', orderAmount)
+      return new NextResponse(generateXunhuPayFailResponse('金额不匹配'), {
         status: 200,
         headers: { 'Content-Type': 'text/plain' }
       })
     }
 
-    // 更新订单状态
-    await updateOrderPaid(order.id, tradeNo, payType)
+    // 确定支付方式
+    const payType = type === 'alipay' ? 'alipay' : 'wechat'
 
-    console.log('[易支付回调] 订单支付成功:', outTradeNo)
+    // 更新订单状态
+    await updateOrderPaid(order.id, outTradeOrder, payType)
+
+    console.log('[虎皮椒回调] 订单支付成功:', tradeOrderId)
 
     // 返回成功响应
-    return new NextResponse(generateEpaySuccessResponse(), {
+    return new NextResponse(generateXunhuPaySuccessResponse(), {
       status: 200,
       headers: { 'Content-Type': 'text/plain' }
     })
   } catch (error) {
-    console.error('[易支付回调] 处理失败:', error)
-    return new NextResponse(generateEpayFailResponse('处理失败'), {
+    console.error('[虎皮椒回调] 处理失败:', error)
+    return new NextResponse(generateXunhuPayFailResponse('处理失败'), {
       status: 200,
       headers: { 'Content-Type': 'text/plain' }
     })
@@ -156,8 +160,8 @@ async function updateOrderPaid(orderId: string, transactionId: string, payType: 
       status: 'paid',
       paymentTime: new Date(),
       updatedAt: new Date(),
-      paymentMethod: `epay_${payType}`,
-      remark: `易支付交易号: ${transactionId}, 支付方式: ${getPaymentTypeName(payType)}`
+      paymentMethod: `xunhupay_${payType}`,
+      remark: `虎皮椒交易号: ${transactionId}, 支付方式: ${getPaymentTypeName(payType)}`
     }
 
     // 如果产品需要密钥（库存不是无限），分配密钥
@@ -243,7 +247,7 @@ async function updateOrderPaid(orderId: string, transactionId: string, payType: 
 }
 
 /**
- * GET 请求处理（部分易支付平台可能使用GET回调）
+ * GET 请求处理（部分支付平台可能使用GET回调）
  */
 export async function GET(request: NextRequest) {
   try {
@@ -255,20 +259,20 @@ export async function GET(request: NextRequest) {
       data[key] = value
     })
 
-    console.log('[易支付回调 GET] 收到通知:', JSON.stringify(data))
+    console.log('[虎皮椒回调 GET] 收到通知:', JSON.stringify(data))
 
     const {
-      trade_no: tradeNo,
-      out_trade_no: outTradeNo,
-      type: payType,
-      money,
-      trade_status: tradeStatus,
-      sign
+      trade_order_id: tradeOrderId,
+      out_trade_order: outTradeOrder,
+      total_fee: totalFee,
+      status,
+      hash,
+      type
     } = data
 
     // 验证必要参数
-    if (!tradeNo || !outTradeNo || !tradeStatus || !sign) {
-      return new NextResponse(generateEpayFailResponse('参数不完整'), {
+    if (!tradeOrderId || !status || !hash) {
+      return new NextResponse(generateXunhuPayFailResponse('参数不完整'), {
         status: 200,
         headers: { 'Content-Type': 'text/plain' }
       })
@@ -276,11 +280,11 @@ export async function GET(request: NextRequest) {
 
     // 查询本地订单
     const order = await prisma.orders.findFirst({
-      where: { orderNo: outTradeNo }
+      where: { orderNo: tradeOrderId }
     })
 
     if (!order) {
-      return new NextResponse(generateEpayFailResponse('订单不存在'), {
+      return new NextResponse(generateXunhuPayFailResponse('订单不存在'), {
         status: 200,
         headers: { 'Content-Type': 'text/plain' }
       })
@@ -288,43 +292,46 @@ export async function GET(request: NextRequest) {
 
     // 如果订单已支付，直接返回成功
     if (order.status === 'paid' || order.status === 'completed') {
-      return new NextResponse(generateEpaySuccessResponse(), {
+      return new NextResponse(generateXunhuPaySuccessResponse(), {
         status: 200,
         headers: { 'Content-Type': 'text/plain' }
       })
     }
 
     // 获取配置验证签名
-    let config = await getEpayConfigFromDB()
+    let config = await getXunhuPayConfigFromDB()
     if (!config) {
-      config = getEpayConfig()
+      config = getXunhuPayConfig()
     }
 
-    if (!config || !verifyEpaySign(data, config.key)) {
-      return new NextResponse(generateEpayFailResponse('签名验证失败'), {
+    if (!config || !verifyHash(data, config.appSecret)) {
+      return new NextResponse(generateXunhuPayFailResponse('签名验证失败'), {
         status: 200,
         headers: { 'Content-Type': 'text/plain' }
       })
     }
 
     // 验证支付状态
-    if (tradeStatus !== 'TRADE_SUCCESS') {
-      return new NextResponse(generateEpayFailResponse('支付未成功'), {
+    if (status !== 'OD') {
+      return new NextResponse(generateXunhuPayFailResponse('支付未成功'), {
         status: 200,
         headers: { 'Content-Type': 'text/plain' }
       })
     }
 
-    // 更新订单状态
-    await updateOrderPaid(order.id, tradeNo, payType || 'alipay')
+    // 确定支付方式
+    const payType = type === 'alipay' ? 'alipay' : 'wechat'
 
-    return new NextResponse(generateEpaySuccessResponse(), {
+    // 更新订单状态
+    await updateOrderPaid(order.id, outTradeOrder || '', payType)
+
+    return new NextResponse(generateXunhuPaySuccessResponse(), {
       status: 200,
       headers: { 'Content-Type': 'text/plain' }
     })
   } catch (error) {
-    console.error('[易支付回调 GET] 处理失败:', error)
-    return new NextResponse(generateEpayFailResponse('处理失败'), {
+    console.error('[虎皮椒回调 GET] 处理失败:', error)
+    return new NextResponse(generateXunhuPayFailResponse('处理失败'), {
       status: 200,
       headers: { 'Content-Type': 'text/plain' }
     })

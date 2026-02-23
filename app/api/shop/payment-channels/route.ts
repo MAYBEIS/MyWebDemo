@@ -19,9 +19,9 @@ const DEFAULT_CHANNELS = [
     config: {}
   },
   {
-    code: 'epay',
-    name: '易支付',
-    description: '第四方聚合支付平台，支持微信和支付宝，个人开发者友好，无需商户资质',
+    code: 'xunhupay',
+    name: '虎皮椒支付',
+    description: '第三方聚合支付平台，支持微信和支付宝，个人开发者友好，无需商户资质',
     enabled: false,
     config: {}
   }

@@ -279,11 +279,11 @@ export default function OrdersPage() {
     setPaymentMethodDialogOpen(true)
   }
 
-  // 发起易支付
-  const handleEpay = async (order: Order, payType: 'alipay' | 'wxpay' | 'qqpay') => {
+  // 发起虎皮椒支付
+  const handleXunhupay = async (order: Order, payType: 'wechat' | 'alipay') => {
     setProcessingPayment(true)
     try {
-      const response = await fetch('/api/shop/epay', {
+      const response = await fetch('/api/shop/xunhupay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -310,7 +310,7 @@ export default function OrdersPage() {
         toast.error(data.error || '创建支付订单失败')
       }
     } catch (error) {
-      console.error('发起易支付失败:', error)
+      console.error('发起虎皮椒支付失败:', error)
       toast.error('发起支付失败')
     } finally {
       setProcessingPayment(false)
@@ -326,16 +326,13 @@ export default function OrdersPage() {
     // 根据选择的支付方式调用不同的支付接口
     if (selectedPaymentMethod === 'wechat') {
       await handleWechatPay(payingOrder)
-    } else if (selectedPaymentMethod === 'epay_alipay') {
-      await handleEpay(payingOrder, 'alipay')
-    } else if (selectedPaymentMethod === 'epay_wxpay') {
-      await handleEpay(payingOrder, 'wxpay')
-    } else if (selectedPaymentMethod === 'epay_qqpay') {
-      await handleEpay(payingOrder, 'qqpay')
-    } else if (selectedPaymentMethod === 'epay') {
-      // 如果选择的是易支付，让用户再选择具体支付方式
-      // 这里默认使用支付宝
-      await handleEpay(payingOrder, 'alipay')
+    } else if (selectedPaymentMethod === 'xunhupay_alipay') {
+      await handleXunhupay(payingOrder, 'alipay')
+    } else if (selectedPaymentMethod === 'xunhupay_wechat') {
+      await handleXunhupay(payingOrder, 'wechat')
+    } else if (selectedPaymentMethod === 'xunhupay') {
+      // 如果选择的是虎皮椒支付，默认使用支付宝
+      await handleXunhupay(payingOrder, 'alipay')
     }
   }
 
@@ -605,9 +602,8 @@ export default function OrdersPage() {
                   <div className="text-sm text-muted-foreground">支付方式</div>
                   <div className="font-medium">
                     {selectedOrder.paymentMethod === 'wechat' ? '微信支付' : 
-                     selectedOrder.paymentMethod === 'epay_alipay' ? '支付宝（易支付）' :
-                     selectedOrder.paymentMethod === 'epay_wxpay' ? '微信支付（易支付）' :
-                     selectedOrder.paymentMethod === 'epay_qqpay' ? 'QQ钱包（易支付）' :
+                     selectedOrder.paymentMethod === 'xunhupay_alipay' ? '支付宝（虎皮椒）' :
+                     selectedOrder.paymentMethod === 'xunhupay_wechat' ? '微信支付（虎皮椒）' :
                      selectedOrder.paymentMethod === 'manual' ? '人工处理' :
                      selectedOrder.paymentMethod || '-'}
                   </div>
@@ -832,96 +828,54 @@ export default function OrdersPage() {
                       </div>
                     </div>
                   )
-                } else if (channel.code === 'epay') {
-                  // 易支付根据配置显示启用的支付方式
+                } else if (channel.code === 'xunhupay') {
+                  // 虎皮椒支付根据配置显示启用的支付方式
                   const enabledTypes = channel.config?.enabledPaymentTypes 
                     ? channel.config.enabledPaymentTypes.split(',').filter((t: string) => t)
-                    : ['alipay', 'wxpay'] // 默认显示支付宝和微信
+                    : ['wechat', 'alipay'] // 默认显示微信和支付宝
                   
                   return (
                     <div key={channel.code} className="space-y-2">
-                      {enabledTypes.includes('alipay') && (
+                      {enabledTypes.includes('wechat') && (
                         <div
                           className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                            selectedPaymentMethod === 'epay_alipay' 
+                            selectedPaymentMethod === 'xunhupay_wechat' 
                               ? 'border-primary bg-primary/5' 
                               : 'hover:bg-muted/50'
                           }`}
-                          onClick={() => setSelectedPaymentMethod('epay_alipay')}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-blue-500/10">
-                              <Wallet className="h-5 w-5 text-blue-500" />
-                            </div>
-                            <div>
-                              <div className="font-medium">支付宝（易支付）</div>
-                              <div className="text-xs text-muted-foreground">使用支付宝扫码支付</div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {enabledTypes.includes('wxpay') && (
-                        <div
-                          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                            selectedPaymentMethod === 'epay_wxpay' 
-                              ? 'border-primary bg-primary/5' 
-                              : 'hover:bg-muted/50'
-                          }`}
-                          onClick={() => setSelectedPaymentMethod('epay_wxpay')}
+                          onClick={() => setSelectedPaymentMethod('xunhupay_wechat')}
                         >
                           <div className="flex items-center gap-3">
                             <div className="p-2 rounded-lg bg-green-500/10">
                               <QrCode className="h-5 w-5 text-green-500" />
                             </div>
                             <div>
-                              <div className="font-medium">微信支付（易支付）</div>
+                              <div className="font-medium">微信支付（虎皮椒）</div>
                               <div className="text-xs text-muted-foreground">使用微信扫码支付</div>
                             </div>
                           </div>
                         </div>
                       )}
-                      {enabledTypes.includes('qqpay') && (
+                      {enabledTypes.includes('alipay') && (
                         <div
                           className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                            selectedPaymentMethod === 'epay_qqpay' 
+                            selectedPaymentMethod === 'xunhupay_alipay' 
                               ? 'border-primary bg-primary/5' 
                               : 'hover:bg-muted/50'
                           }`}
-                          onClick={() => setSelectedPaymentMethod('epay_qqpay')}
+                          onClick={() => setSelectedPaymentMethod('xunhupay_alipay')}
                         >
                           <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-purple-500/10">
-                              <Wallet className="h-5 w-5 text-purple-500" />
+                            <div className="p-2 rounded-lg bg-blue-500/10">
+                              <Wallet className="h-5 w-5 text-blue-500" />
                             </div>
                             <div>
-                              <div className="font-medium">QQ钱包（易支付）</div>
-                              <div className="text-xs text-muted-foreground">使用QQ钱包扫码支付</div>
+                              <div className="font-medium">支付宝（虎皮椒）</div>
+                              <div className="text-xs text-muted-foreground">使用支付宝扫码支付</div>
                             </div>
                           </div>
                         </div>
                       )}
-                    </div>
-                  )
-                } else if (channel.code === 'alipay') {
-                  return (
-                    <div
-                      key={channel.code}
-                      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                        selectedPaymentMethod === channel.code 
-                          ? 'border-primary bg-primary/5' 
-                          : 'hover:bg-muted/50'
-                      }`}
-                      onClick={() => setSelectedPaymentMethod(channel.code)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-blue-500/10">
-                          <Wallet className="h-5 w-5 text-blue-500" />
-                        </div>
-                        <div>
-                          <div className="font-medium">支付宝</div>
-                          <div className="text-xs text-muted-foreground">使用支付宝扫码支付</div>
-                        </div>
-                      </div>
                     </div>
                   )
                 }
