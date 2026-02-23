@@ -43,13 +43,21 @@ const channelConfigFields: Record<string, { label: string; type: string; placeho
     { label: '应用私钥', type: 'password', placeholder: '应用私钥内容', required: true },
     { label: '支付宝公钥', type: 'password', placeholder: '支付宝公钥内容', required: true },
     { label: '回调通知地址', type: 'text', placeholder: 'https://your-domain.com/api/shop/alipay/notify', required: true },
+  ],
+  epay: [
+    { label: '商户ID', type: 'text', placeholder: '1000', required: true },
+    { label: '商户密钥', type: 'password', placeholder: '商户密钥', required: true },
+    { label: '支付网关', type: 'text', placeholder: 'https://pay.example.com', required: true },
+    { label: '异步通知地址', type: 'text', placeholder: 'https://your-domain.com/api/shop/epay/notify', required: false },
+    { label: '同步跳转地址', type: 'text', placeholder: 'https://your-domain.com/orders', required: false },
   ]
 }
 
 // 支付渠道名称映射
 const channelNames: Record<string, string> = {
   wechat: '微信支付',
-  alipay: '支付宝'
+  alipay: '支付宝',
+  epay: '易支付'
 }
 
 interface PaymentChannelManagerProps {
@@ -172,6 +180,11 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
     '应用ID': 'appId',
     '应用私钥': 'privateKey',
     '支付宝公钥': 'alipayPublicKey',
+    '商户ID': 'pid',
+    '商户密钥': 'key',
+    '支付网关': 'gateway',
+    '异步通知地址': 'notifyUrl',
+    '同步跳转地址': 'returnUrl',
   }
 
   // 获取配置字段值
@@ -287,8 +300,9 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
               <div className="text-sm text-muted-foreground">
                 <p className="font-medium text-foreground mb-1">配置说明</p>
                 <ul className="list-disc list-inside space-y-1 text-xs">
-                  <li>微信支付需要申请微信商户平台账号并完成企业认证</li>
-                  <li>API密钥可在微信商户平台 - 账户中心 - API安全中设置</li>
+                  <li>微信支付/支付宝需要申请商户平台账号并完成企业认证</li>
+                  <li>易支付是第四方聚合支付平台，个人开发者友好，无需商户资质</li>
+                  <li>易支付支持微信和支付宝两种支付方式，只需配置一套参数</li>
                   <li>回调通知地址必须是外网可访问的HTTPS地址</li>
                   <li>配置信息将加密存储在数据库中，建议定期更换密钥</li>
                 </ul>

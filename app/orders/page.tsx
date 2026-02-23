@@ -11,7 +11,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Loader2, ShoppingBag, Eye, Copy, Check, QrCode, RefreshCw, X, Clock } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Loader2, ShoppingBag, Eye, Copy, Check, QrCode, RefreshCw, X, Clock, CreditCard, Wallet } from 'lucide-react'
 import { useAuth } from '@/lib/auth-store'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
@@ -89,6 +96,12 @@ export default function OrdersPage() {
   const [payingOrder, setPayingOrder] = useState<Order | null>(null)
   const [checkingPayment, setCheckingPayment] = useState(false)
   
+  // 支付方式选择状态
+  const [paymentMethodDialogOpen, setPaymentMethodDialogOpen] = useState(false)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('')
+  const [availableChannels, setAvailableChannels] = useState<{code: string, name: string}[]>([])
+  const [processingPayment, setProcessingPayment] = useState(false)
+  
   // 倒计时状态
   const [countdowns, setCountdowns] = useState<Record<string, string>>({})
   
@@ -102,7 +115,27 @@ export default function OrdersPage() {
       return
     }
     fetchOrders()
+    fetchAvailableChannels()
   }, [isLoggedIn, router])
+
+  // 获取可用的支付渠道
+  const fetchAvailableChannels = async () => {
+    try {
+      const response = await fetch('/api/shop/payment-channels')
+      const data = await response.json()
+      if (data.success) {
+        const channels = data.data
+          .filter((ch: any) => ch.enabled)
+          .map((ch: any) => ({
+            code: ch.code,
+            name: ch.name
+          }))
+        setAvailableChannels(channels)
+      }
+    } catch (error) {
+      console.error('获取支付渠道失败:', error)
+    }
+  }
 
   // 处理从商店页面跳转过来的支付请求
   useEffect(() => {
@@ -232,6 +265,74 @@ export default function OrdersPage() {
     } catch (error) {
       console.error('发起微信支付失败:', error)
       toast.error('发起支付失败')
+    }
+  }
+
+  // 打开支付方式选择对话框
+  const handleOpenPaymentMethod = (order: Order) => {
+    setPayingOrder(order)
+    // 默认选择第一个可用渠道
+    if (availableChannels.length > 0) {
+      setSelectedPaymentMethod(availableChannels[0].code)
+    }
+    setPaymentMethodDialogOpen(true)
+  }
+
+  // 发起易支付
+  const handleEpay = async (order: Order, payType: 'alipay' | 'wxpay') => {
+    setProcessingPayment(true)
+    try {
+      const response = await fetch('/api/shop/epay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id,
+          payType: payType
+        })
+      })
+
+      const data = await response.json()
+      if (data.success && data.data.payUrl) {
+        // 测试模式下显示二维码对话框
+        if (data.data.testMode) {
+          setPayQrCodeUrl(data.data.payUrl)
+          setPayQrDialogOpen(true)
+        } else {
+          // 正式模式跳转到支付页面
+          window.open(data.data.payUrl, '_blank')
+          toast.success('已打开支付页面，请完成支付')
+          // 开始轮询检查支付状态
+          setPayQrCodeUrl(null)
+          setPayQrDialogOpen(true)
+        }
+      } else {
+        toast.error(data.error || '创建支付订单失败')
+      }
+    } catch (error) {
+      console.error('发起易支付失败:', error)
+      toast.error('发起支付失败')
+    } finally {
+      setProcessingPayment(false)
+    }
+  }
+
+  // 确认支付方式并支付
+  const handleConfirmPayment = async () => {
+    if (!payingOrder || !selectedPaymentMethod) return
+
+    setPaymentMethodDialogOpen(false)
+    
+    // 根据选择的支付方式调用不同的支付接口
+    if (selectedPaymentMethod === 'wechat') {
+      await handleWechatPay(payingOrder)
+    } else if (selectedPaymentMethod === 'epay_alipay') {
+      await handleEpay(payingOrder, 'alipay')
+    } else if (selectedPaymentMethod === 'epay_wxpay') {
+      await handleEpay(payingOrder, 'wxpay')
+    } else if (selectedPaymentMethod === 'epay') {
+      // 如果选择的是易支付，让用户再选择具体支付方式
+      // 这里默认使用支付宝
+      await handleEpay(payingOrder, 'alipay')
     }
   }
 
@@ -378,15 +479,15 @@ export default function OrdersPage() {
                       {getStatusBadge(order.status)}
                     </div>
                     <div className="flex gap-2">
-                      {/* 待支付订单显示微信支付和取消按钮 */}
+                      {/* 待支付订单显示支付和取消按钮 */}
                       {order.status === 'pending' && (
                         <>
                           <Button
                             size="sm"
-                            onClick={() => handleWechatPay(order)}
+                            onClick={() => handleOpenPaymentMethod(order)}
                           >
-                            <QrCode className="h-4 w-4 mr-1" />
-                            微信支付
+                            <CreditCard className="h-4 w-4 mr-1" />
+                            立即支付
                           </Button>
                           <Button
                             variant="outline"
@@ -501,6 +602,8 @@ export default function OrdersPage() {
                   <div className="text-sm text-muted-foreground">支付方式</div>
                   <div className="font-medium">
                     {selectedOrder.paymentMethod === 'wechat' ? '微信支付' : 
+                     selectedOrder.paymentMethod === 'epay_alipay' ? '支付宝（易支付）' :
+                     selectedOrder.paymentMethod === 'epay_wxpay' ? '微信支付（易支付）' :
                      selectedOrder.paymentMethod === 'manual' ? '人工处理' :
                      selectedOrder.paymentMethod || '-'}
                   </div>
@@ -594,11 +697,11 @@ export default function OrdersPage() {
                     className="w-full"
                     onClick={() => {
                       setDetailDialogOpen(false)
-                      handleWechatPay(selectedOrder)
+                      handleOpenPaymentMethod(selectedOrder)
                     }}
                   >
-                    <QrCode className="h-4 w-4 mr-2" />
-                    微信支付
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    立即支付
                   </Button>
                 </div>
               )}
@@ -611,9 +714,9 @@ export default function OrdersPage() {
       <Dialog open={payQrDialogOpen} onOpenChange={setPayQrDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>微信支付</DialogTitle>
+            <DialogTitle>扫码支付</DialogTitle>
             <DialogDescription>
-              请使用微信扫描下方二维码完成支付
+              请扫描下方二维码完成支付
             </DialogDescription>
           </DialogHeader>
 
@@ -624,7 +727,7 @@ export default function OrdersPage() {
                 // 使用第三方二维码生成服务
                 <img 
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payQrCodeUrl)}`}
-                  alt="微信支付二维码"
+                  alt="支付二维码"
                   className="w-[200px] h-[200px]"
                 />
               ) : (
@@ -673,6 +776,139 @@ export default function OrdersPage() {
                 <RefreshCw className="h-4 w-4 mr-2" />
               )}
               我已支付，刷新状态
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 支付方式选择对话框 */}
+      <Dialog open={paymentMethodDialogOpen} onOpenChange={setPaymentMethodDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>选择支付方式</DialogTitle>
+            <DialogDescription>
+              请选择您要使用的支付方式
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-4">
+            {/* 订单金额显示 */}
+            {payingOrder && (
+              <div className="text-center p-3 bg-muted/30 rounded-lg">
+                <div className="text-sm text-muted-foreground">支付金额</div>
+                <div className="text-2xl font-bold text-primary">
+                  {formatPrice(payingOrder.amount)}
+                </div>
+              </div>
+            )}
+
+            {/* 支付方式列表 */}
+            <div className="space-y-2">
+              {availableChannels.map((channel) => {
+                // 根据渠道类型显示不同的选项
+                if (channel.code === 'wechat') {
+                  return (
+                    <div
+                      key={channel.code}
+                      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                        selectedPaymentMethod === channel.code 
+                          ? 'border-primary bg-primary/5' 
+                          : 'hover:bg-muted/50'
+                      }`}
+                      onClick={() => setSelectedPaymentMethod(channel.code)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-green-500/10">
+                          <QrCode className="h-5 w-5 text-green-500" />
+                        </div>
+                        <div>
+                          <div className="font-medium">微信支付</div>
+                          <div className="text-xs text-muted-foreground">使用微信扫码支付</div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                } else if (channel.code === 'epay') {
+                  // 易支付显示两个选项：支付宝和微信
+                  return (
+                    <div key={channel.code} className="space-y-2">
+                      <div
+                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                          selectedPaymentMethod === 'epay_alipay' 
+                            ? 'border-primary bg-primary/5' 
+                            : 'hover:bg-muted/50'
+                        }`}
+                        onClick={() => setSelectedPaymentMethod('epay_alipay')}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-blue-500/10">
+                            <Wallet className="h-5 w-5 text-blue-500" />
+                          </div>
+                          <div>
+                            <div className="font-medium">支付宝（易支付）</div>
+                            <div className="text-xs text-muted-foreground">使用支付宝扫码支付</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div
+                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                          selectedPaymentMethod === 'epay_wxpay' 
+                            ? 'border-primary bg-primary/5' 
+                            : 'hover:bg-muted/50'
+                        }`}
+                        onClick={() => setSelectedPaymentMethod('epay_wxpay')}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-green-500/10">
+                            <QrCode className="h-5 w-5 text-green-500" />
+                          </div>
+                          <div>
+                            <div className="font-medium">微信支付（易支付）</div>
+                            <div className="text-xs text-muted-foreground">使用微信扫码支付</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                } else if (channel.code === 'alipay') {
+                  return (
+                    <div
+                      key={channel.code}
+                      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                        selectedPaymentMethod === channel.code 
+                          ? 'border-primary bg-primary/5' 
+                          : 'hover:bg-muted/50'
+                      }`}
+                      onClick={() => setSelectedPaymentMethod(channel.code)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-blue-500/10">
+                          <Wallet className="h-5 w-5 text-blue-500" />
+                        </div>
+                        <div>
+                          <div className="font-medium">支付宝</div>
+                          <div className="text-xs text-muted-foreground">使用支付宝扫码支付</div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+                return null
+              })}
+            </div>
+
+            {/* 确认按钮 */}
+            <Button 
+              className="w-full"
+              onClick={handleConfirmPayment}
+              disabled={!selectedPaymentMethod || processingPayment}
+            >
+              {processingPayment ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <CreditCard className="h-4 w-4 mr-2" />
+              )}
+              确认支付
             </Button>
           </div>
         </DialogContent>

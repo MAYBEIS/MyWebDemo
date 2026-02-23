@@ -7,14 +7,21 @@ const DEFAULT_CHANNELS = [
   {
     code: 'wechat',
     name: '微信支付',
-    description: '支持微信扫码支付、H5支付等多种支付方式',
+    description: '支持微信扫码支付、H5支付等多种支付方式（需要商户资质）',
     enabled: false,
     config: {}
   },
   {
     code: 'alipay',
     name: '支付宝',
-    description: '支持支付宝扫码支付、H5支付等多种支付方式',
+    description: '支持支付宝扫码支付、H5支付等多种支付方式（需要商户资质）',
+    enabled: false,
+    config: {}
+  },
+  {
+    code: 'epay',
+    name: '易支付',
+    description: '第四方聚合支付平台，支持微信和支付宝，个人开发者友好，无需商户资质',
     enabled: false,
     config: {}
   }
