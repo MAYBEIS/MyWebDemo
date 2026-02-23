@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Loader2, CreditCard, Settings, AlertCircle, Eye, EyeOff, Save, HelpCircle } from 'lucide-react'
+import { Loader2, CreditCard, Settings, AlertCircle, Eye, EyeOff, Save, HelpCircle, Globe } from 'lucide-react'
 import { toast } from 'sonner'
 
 // 支付渠道配置类型
@@ -80,10 +80,18 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
   const [showSecret, setShowSecret] = useState<Record<string, boolean>>({})
   // 虎皮椒特有配置状态
   const [xunhupayPaymentTypes, setXunhupayPaymentTypes] = useState<string[]>(['wechat', 'alipay'])
+  // 使用当前域名开关
+  const [useCurrentDomain, setUseCurrentDomain] = useState(false)
+  // 当前域名
+  const [currentDomain, setCurrentDomain] = useState('')
 
   useEffect(() => {
     if (!initialChannels) {
       fetchChannels()
+    }
+    // 获取当前域名
+    if (typeof window !== 'undefined') {
+      setCurrentDomain(window.location.origin)
     }
   }, [initialChannels])
 
@@ -135,6 +143,11 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
       ? JSON.parse(channel.config) 
       : channel.config
     setEditedConfig({ ...configObj })
+    
+    // 检查是否使用当前域名
+    const notifyUrl = configObj.notifyUrl || ''
+    const expectedNotifyUrl = `${currentDomain}/api/shop/${channel.code}/notify`
+    setUseCurrentDomain(notifyUrl === expectedNotifyUrl || notifyUrl === '')
     
     // 加载虎皮椒特有配置
     if (channel.code === 'xunhupay') {
@@ -209,6 +222,17 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
       ...prev,
       [fieldLabel]: !prev[fieldLabel]
     }))
+  }
+
+  // 切换使用当前域名
+  const handleToggleUseCurrentDomain = (checked: boolean) => {
+    setUseCurrentDomain(checked)
+    if (checked && selectedChannel && currentDomain) {
+      // 自动填充当前域名的回调地址
+      const notifyUrl = `${currentDomain}/api/shop/${selectedChannel.code}/notify`
+      setConfigValue('异步通知地址', notifyUrl)
+      setConfigValue('回调通知地址', notifyUrl)
+    }
   }
 
   // 将中文标签映射到配置键
@@ -376,6 +400,23 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                 
                 {/* 基本配置 */}
                 <TabsContent value="basic" className="space-y-4 mt-4">
+                  {/* 使用当前域名开关 */}
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center gap-2">
+                      <Globe className="h-4 w-4 text-primary" />
+                      <div>
+                        <Label className="font-medium">使用当前域名</Label>
+                        <p className="text-xs text-muted-foreground">
+                          自动填充回调地址：{currentDomain}/api/shop/xunhupay/notify
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={useCurrentDomain}
+                      onCheckedChange={handleToggleUseCurrentDomain}
+                    />
+                  </div>
+                  
                   {(channelConfigFields.xunhupay || []).map((field) => (
                     <div key={field.label} className="grid gap-2">
                       <div className="flex items-center justify-between">
@@ -493,6 +534,23 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
             // 其他支付渠道配置
             selectedChannel && (
               <div className="space-y-4 py-4">
+                {/* 使用当前域名开关 */}
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-primary" />
+                    <div>
+                      <Label className="font-medium">使用当前域名</Label>
+                      <p className="text-xs text-muted-foreground">
+                        自动填充回调地址：{currentDomain}/api/shop/{selectedChannel.code}/notify
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={useCurrentDomain}
+                    onCheckedChange={handleToggleUseCurrentDomain}
+                  />
+                </div>
+                
                 {(channelConfigFields[selectedChannel.code] || []).map((field) => (
                   <div key={field.label} className="grid gap-2">
                     <div className="flex items-center justify-between">
