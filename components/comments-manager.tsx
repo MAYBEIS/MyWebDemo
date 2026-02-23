@@ -36,8 +36,8 @@ interface Comment {
   content: string
   createdAt: string
   updatedAt: string
-  author: Author
-  post: Post
+  author: Author | null
+  post: Post | null
   parentId: string | null
   replyCount: number
 }

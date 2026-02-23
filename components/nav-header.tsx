@@ -86,7 +86,7 @@ export function NavHeader() {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 bg-background border-b border-border ${
+      className={`fixed top-0 left-0 right-0 z-50 bg-background border-b border-border transition-shadow duration-300 ${
         isScrolled
           ? "shadow-lg shadow-background/20"
           : ""
@@ -148,7 +148,7 @@ export function NavHeader() {
 
               {showUserMenu && (
                 <div
-                  className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-border/50 bg-card glass-strong shadow-xl shadow-background/40 overflow-hidden animate-slide-up"
+                  className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-border bg-card shadow-xl overflow-hidden animate-slide-up"
                   style={{ animationDuration: "0.2s" }}
                   onClick={(e) => e.stopPropagation()}
                 >

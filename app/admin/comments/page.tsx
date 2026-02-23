@@ -37,7 +37,7 @@ export default async function AdminCommentsPage() {
   }
   
   // 获取所有评论
-  const comments = await prisma.comments.findMany({
+  const rawComments = await prisma.comments.findMany({
     orderBy: { createdAt: "desc" },
     include: {
       users: {
@@ -51,6 +51,27 @@ export default async function AdminCommentsPage() {
       }
     }
   })
+
+  // 转换数据格式，将 users/posts 映射为 author/post
+  const comments = rawComments.map(comment => ({
+    id: comment.id,
+    content: comment.content,
+    createdAt: comment.createdAt,
+    updatedAt: comment.updatedAt,
+    author: comment.users ? {
+      id: comment.users.id,
+      name: comment.users.name,
+      avatar: comment.users.avatar,
+      isAdmin: comment.users.isAdmin,
+    } : null,
+    post: comment.posts ? {
+      id: comment.posts.id,
+      title: comment.posts.title,
+      slug: comment.posts.slug,
+    } : null,
+    parentId: comment.parentId,
+    replyCount: comment.comments?.length || 0,
+  }))
 
   return (
     <main className="min-h-screen bg-background noise-bg">

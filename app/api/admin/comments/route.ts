@@ -57,19 +57,19 @@ export async function GET(request: NextRequest) {
           content: comment.content,
           createdAt: comment.createdAt,
           updatedAt: comment.updatedAt,
-          author: {
+          author: comment.users ? {
             id: comment.users.id,
             name: comment.users.name,
             avatar: comment.users.avatar,
             isAdmin: comment.users.isAdmin,
-          },
-          post: {
+          } : null,
+          post: comment.posts ? {
             id: comment.posts.id,
             title: comment.posts.title,
             slug: comment.posts.slug,
-          },
+          } : null,
           parentId: comment.parentId,
-          replyCount: comment.comments.length,
+          replyCount: comment.comments?.length || 0,
         })),
         total,
         page,
