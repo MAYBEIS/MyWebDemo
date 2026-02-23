@@ -68,6 +68,27 @@ export async function GET(request: NextRequest) {
         })
       }
       channels = await prisma.payment_channels.findMany()
+    } else {
+      // 检查是否有缺失的默认渠道，如果有则添加
+      const existingCodes = channels.map(ch => ch.code)
+      const missingChannels = DEFAULT_CHANNELS.filter(ch => !existingCodes.includes(ch.code))
+      
+      if (missingChannels.length > 0) {
+        for (const channel of missingChannels) {
+          await prisma.payment_channels.create({
+            data: {
+              id: `channel_${channel.code}_${Date.now()}`,
+              code: channel.code,
+              name: channel.name,
+              description: channel.description,
+              enabled: channel.enabled,
+              config: JSON.stringify(channel.config)
+            }
+          })
+        }
+        // 重新获取渠道列表
+        channels = await prisma.payment_channels.findMany()
+      }
     }
 
     // 解析配置JSON

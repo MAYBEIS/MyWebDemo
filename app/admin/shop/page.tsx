@@ -91,7 +91,7 @@ export default async function AdminShopPage() {
         id: `channel_wechat_${Date.now()}`,
         code: 'wechat',
         name: '微信支付',
-        description: '支持微信扫码支付、H5支付等多种支付方式',
+        description: '支持微信扫码支付、H5支付等多种支付方式（需要商户资质）',
         enabled: false,
         config: '{}'
       },
@@ -99,7 +99,15 @@ export default async function AdminShopPage() {
         id: `channel_alipay_${Date.now() + 1}`,
         code: 'alipay',
         name: '支付宝',
-        description: '支持支付宝扫码支付、H5支付等多种支付方式',
+        description: '支持支付宝扫码支付、H5支付等多种支付方式（需要商户资质）',
+        enabled: false,
+        config: '{}'
+      },
+      {
+        id: `channel_epay_${Date.now() + 2}`,
+        code: 'epay',
+        name: '易支付',
+        description: '第四方聚合支付平台，支持微信和支付宝，个人开发者友好，无需商户资质',
         enabled: false,
         config: '{}'
       }

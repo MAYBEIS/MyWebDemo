@@ -99,7 +99,7 @@ export default function OrdersPage() {
   // 支付方式选择状态
   const [paymentMethodDialogOpen, setPaymentMethodDialogOpen] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('')
-  const [availableChannels, setAvailableChannels] = useState<{code: string, name: string}[]>([])
+  const [availableChannels, setAvailableChannels] = useState<{code: string, name: string, config?: Record<string, string>}[]>([])
   const [processingPayment, setProcessingPayment] = useState(false)
   
   // 倒计时状态
@@ -128,7 +128,8 @@ export default function OrdersPage() {
           .filter((ch: any) => ch.enabled)
           .map((ch: any) => ({
             code: ch.code,
-            name: ch.name
+            name: ch.name,
+            config: typeof ch.config === 'string' ? JSON.parse(ch.config) : ch.config
           }))
         setAvailableChannels(channels)
       }
@@ -279,7 +280,7 @@ export default function OrdersPage() {
   }
 
   // 发起易支付
-  const handleEpay = async (order: Order, payType: 'alipay' | 'wxpay') => {
+  const handleEpay = async (order: Order, payType: 'alipay' | 'wxpay' | 'qqpay') => {
     setProcessingPayment(true)
     try {
       const response = await fetch('/api/shop/epay', {
@@ -329,6 +330,8 @@ export default function OrdersPage() {
       await handleEpay(payingOrder, 'alipay')
     } else if (selectedPaymentMethod === 'epay_wxpay') {
       await handleEpay(payingOrder, 'wxpay')
+    } else if (selectedPaymentMethod === 'epay_qqpay') {
+      await handleEpay(payingOrder, 'qqpay')
     } else if (selectedPaymentMethod === 'epay') {
       // 如果选择的是易支付，让用户再选择具体支付方式
       // 这里默认使用支付宝
@@ -604,6 +607,7 @@ export default function OrdersPage() {
                     {selectedOrder.paymentMethod === 'wechat' ? '微信支付' : 
                      selectedOrder.paymentMethod === 'epay_alipay' ? '支付宝（易支付）' :
                      selectedOrder.paymentMethod === 'epay_wxpay' ? '微信支付（易支付）' :
+                     selectedOrder.paymentMethod === 'epay_qqpay' ? 'QQ钱包（易支付）' :
                      selectedOrder.paymentMethod === 'manual' ? '人工处理' :
                      selectedOrder.paymentMethod || '-'}
                   </div>
@@ -829,45 +833,73 @@ export default function OrdersPage() {
                     </div>
                   )
                 } else if (channel.code === 'epay') {
-                  // 易支付显示两个选项：支付宝和微信
+                  // 易支付根据配置显示启用的支付方式
+                  const enabledTypes = channel.config?.enabledPaymentTypes 
+                    ? channel.config.enabledPaymentTypes.split(',').filter((t: string) => t)
+                    : ['alipay', 'wxpay'] // 默认显示支付宝和微信
+                  
                   return (
                     <div key={channel.code} className="space-y-2">
-                      <div
-                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                          selectedPaymentMethod === 'epay_alipay' 
-                            ? 'border-primary bg-primary/5' 
-                            : 'hover:bg-muted/50'
-                        }`}
-                        onClick={() => setSelectedPaymentMethod('epay_alipay')}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-blue-500/10">
-                            <Wallet className="h-5 w-5 text-blue-500" />
-                          </div>
-                          <div>
-                            <div className="font-medium">支付宝（易支付）</div>
-                            <div className="text-xs text-muted-foreground">使用支付宝扫码支付</div>
-                          </div>
-                        </div>
-                      </div>
-                      <div
-                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                          selectedPaymentMethod === 'epay_wxpay' 
-                            ? 'border-primary bg-primary/5' 
-                            : 'hover:bg-muted/50'
-                        }`}
-                        onClick={() => setSelectedPaymentMethod('epay_wxpay')}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-green-500/10">
-                            <QrCode className="h-5 w-5 text-green-500" />
-                          </div>
-                          <div>
-                            <div className="font-medium">微信支付（易支付）</div>
-                            <div className="text-xs text-muted-foreground">使用微信扫码支付</div>
+                      {enabledTypes.includes('alipay') && (
+                        <div
+                          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                            selectedPaymentMethod === 'epay_alipay' 
+                              ? 'border-primary bg-primary/5' 
+                              : 'hover:bg-muted/50'
+                          }`}
+                          onClick={() => setSelectedPaymentMethod('epay_alipay')}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-blue-500/10">
+                              <Wallet className="h-5 w-5 text-blue-500" />
+                            </div>
+                            <div>
+                              <div className="font-medium">支付宝（易支付）</div>
+                              <div className="text-xs text-muted-foreground">使用支付宝扫码支付</div>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
+                      {enabledTypes.includes('wxpay') && (
+                        <div
+                          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                            selectedPaymentMethod === 'epay_wxpay' 
+                              ? 'border-primary bg-primary/5' 
+                              : 'hover:bg-muted/50'
+                          }`}
+                          onClick={() => setSelectedPaymentMethod('epay_wxpay')}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-green-500/10">
+                              <QrCode className="h-5 w-5 text-green-500" />
+                            </div>
+                            <div>
+                              <div className="font-medium">微信支付（易支付）</div>
+                              <div className="text-xs text-muted-foreground">使用微信扫码支付</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {enabledTypes.includes('qqpay') && (
+                        <div
+                          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                            selectedPaymentMethod === 'epay_qqpay' 
+                              ? 'border-primary bg-primary/5' 
+                              : 'hover:bg-muted/50'
+                          }`}
+                          onClick={() => setSelectedPaymentMethod('epay_qqpay')}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-purple-500/10">
+                              <Wallet className="h-5 w-5 text-purple-500" />
+                            </div>
+                            <div>
+                              <div className="font-medium">QQ钱包（易支付）</div>
+                              <div className="text-xs text-muted-foreground">使用QQ钱包扫码支付</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )
                 } else if (channel.code === 'alipay') {

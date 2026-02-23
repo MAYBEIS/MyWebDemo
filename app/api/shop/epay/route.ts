@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 验证支付方式
-    if (!['alipay', 'wxpay'].includes(payType)) {
+    if (!['alipay', 'wxpay', 'qqpay'].includes(payType)) {
       return NextResponse.json(
         { success: false, error: '不支持的支付方式' },
         { status: 400 }
