@@ -162,9 +162,13 @@ export function SiteFooter() {
           <p className="text-xs text-muted-foreground/40">
             {"基于 Next.js & Tailwind CSS 构建，部署于 Vercel。"}
           </p>
-          <p className="text-xs text-muted-foreground/40 font-mono">
-            {`// 2024-2026 ${settings.site_title}. 保留所有权利。`}
-          </p>
+          {!isSettingsLoaded ? (
+            <div className="h-4 w-40 bg-muted/30 rounded animate-pulse" />
+          ) : (
+            <p className="text-xs text-muted-foreground/40 font-mono">
+              {`// 2024-2026 ${settings.site_title}. 保留所有权利。`}
+            </p>
+          )}
         </div>
       </div>
     </footer>
