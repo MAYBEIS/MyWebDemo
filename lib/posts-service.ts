@@ -23,6 +23,7 @@ export interface Post {
   published: boolean
   views: number
   likes: number
+  lastCommentAt?: Date | null // 最近评论时间
 }
 
 export interface CreatePostInput {
@@ -108,6 +109,12 @@ export async function getPosts(options: GetPostsOptions = {}): Promise<{
         select: { name: true }
       },
       post_tags: true,
+      // 获取每篇文章的最新评论时间
+      comments: {
+        select: { createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      }
     },
     orderBy: { createdAt: 'desc' },
     skip: (page - 1) * limit,
@@ -131,6 +138,8 @@ export async function getPosts(options: GetPostsOptions = {}): Promise<{
     published: post.published,
     views: post.views,
     likes: post.likes,
+    // 获取最近评论时间（如果有评论的话）
+    lastCommentAt: post.comments && post.comments.length > 0 ? post.comments[0].createdAt : null,
   }))
 
   return {

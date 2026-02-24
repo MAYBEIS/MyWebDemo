@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Clock, Eye, Heart, Search, X, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { fetchPosts, fetchCategories, formatDate, calculateReadTime, formatViews, type Post } from "@/lib/api-posts"
+import { fetchPosts, fetchCategories, formatDate, formatLastCommentTime, formatViews, type Post } from "@/lib/api-posts"
 
 export function BlogList() {
   const [search, setSearch] = useState("")
@@ -183,14 +183,14 @@ export function BlogList() {
                 </span>
               </div>
               <div className="mt-4 flex items-center gap-4 flex-wrap">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
-                  <Clock className="h-3 w-3" />
-                  {calculateReadTime(post.content)}
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
-                  <Eye className="h-3 w-3" />
-                  {formatViews(post.views)}
-                </div>
+                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
+                   <Clock className="h-3 w-3" />
+                   {formatLastCommentTime(post.lastCommentAt)}
+                 </div>
+                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
+                   <Eye className="h-3 w-3" />
+                   {formatViews(post.views)}
+                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
                   <Heart className="h-3 w-3" />
                   {post.likes}
