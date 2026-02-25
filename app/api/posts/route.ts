@@ -4,12 +4,13 @@ import { getCurrentUser } from '@/lib/auth-service'
 
 /**
  * GET /api/posts
- * GET /api/posts?category=xxx&tag=xxx&search=xxx&page=1&limit=10
+ * GET /api/posts?category=xxx&tag=xxx&search=xxx&page=1&limit=10&sortBy=createdAt
  * 1. category: string - Optional - Filter by category
  * 2. tag: string - Optional - Filter by tag
  * 3. search: string - Optional - Search in title, excerpt, content
  * 4. page: number - Optional - Page number (default: 1)
  * 5. limit: number - Optional - Items per page (default: 10)
+ * 6. sortBy: string - Optional - Sort by field (createdAt, lastCommentAt, views)
  * Response: { success: boolean, data: { posts: Post[], total: number, page: number, limit: number } }
  */
 export async function GET(request: NextRequest) {
@@ -20,8 +21,9 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category') || undefined
     const tag = searchParams.get('tag') || undefined
     const search = searchParams.get('search') || undefined
+    const sortBy = (searchParams.get('sortBy') as 'createdAt' | 'lastCommentAt' | 'views') || undefined
 
-    const result = await getPosts({ page, limit, category, tag, search })
+    const result = await getPosts({ page, limit, category, tag, search, sortBy })
 
     return NextResponse.json({
       success: true,

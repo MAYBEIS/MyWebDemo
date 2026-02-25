@@ -20,6 +20,7 @@ export interface Post {
   published: boolean
   views: number
   likes: number
+  lastCommentAt?: string | null // 最近评论时间
 }
 
 export interface PostsResponse {
@@ -45,8 +46,9 @@ export async function fetchPosts(options: {
   category?: string
   tag?: string
   search?: string
+  sortBy?: 'createdAt' | 'lastCommentAt' | 'views'
 } = {}): Promise<PostsResponse> {
-  const { page = 1, limit = 10, category, tag, search } = options
+  const { page = 1, limit = 10, category, tag, search, sortBy } = options
 
   // 构建查询参数
   const params = new URLSearchParams()
@@ -55,6 +57,7 @@ export async function fetchPosts(options: {
   if (category) params.set('category', category)
   if (tag) params.set('tag', tag)
   if (search) params.set('search', search)
+  if (sortBy) params.set('sortBy', sortBy)
 
   try {
     const response = await fetch(`/api/posts?${params.toString()}`, {
@@ -173,4 +176,30 @@ export function formatViews(views: number): string {
     return `${(views / 1000).toFixed(1)}k`
   }
   return views.toString()
+}
+
+/**
+ * 格式化最近评论时间为相对时间
+ */
+export function formatLastCommentTime(dateString: string | null | undefined): string {
+  if (!dateString) return "暂无评论"
+  
+  const date = new Date(dateString)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+  const seconds = Math.floor(diff / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+  
+  if (seconds < 60) return "刚刚评论"
+  if (minutes < 60) return `${minutes} 分钟前评论`
+  if (hours < 24) return `${hours} 小时前评论`
+  if (days < 7) return `${days} 天前评论`
+  
+  // 超过7天显示具体日期
+  return date.toLocaleDateString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+  }) + " 评论"
 }

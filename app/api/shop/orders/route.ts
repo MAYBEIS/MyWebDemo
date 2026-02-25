@@ -178,18 +178,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 检查待支付订单数量（最多3个）
+    // 检查待支付订单数量（最多1个）
     const pendingOrdersCount = await prisma.orders.count({
       where: {
         userId: user.id,
         status: 'pending'
       }
     })
-    if (pendingOrdersCount >= 3) {
+    if (pendingOrdersCount >= 1) {
       return NextResponse.json(
-        { success: false, error: '您有太多未支付的订单，请先完成支付或取消订单' },
+        { success: false, error: '您有未支付的订单，请先完成支付或取消订单' },
         { status: 400 }
       )
+    }
+
+    // 检查用户是否已经是会员（用于前端提示）
+    let membershipInfo = null
+    if (product.type === 'membership') {
+      const existingMembership = await prisma.user_memberships.findUnique({
+        where: { userId: user.id }
+      })
+      
+      if (existingMembership && existingMembership.active) {
+        const now = new Date()
+        if (new Date(existingMembership.endDate) > now) {
+          // 用户是有效会员，返回提示信息
+          membershipInfo = {
+            isMember: true,
+            endDate: existingMembership.endDate,
+            message: `您已是会员，有效期至 ${new Date(existingMembership.endDate).toLocaleDateString('zh-CN')}，购买后时长将叠加`
+          }
+        }
+      }
     }
 
     // 计算最终金额（应用优惠券）
@@ -254,7 +274,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: order,
-      message: '订单创建成功，请完成支付'
+      membershipInfo,
+      message: membershipInfo 
+        ? membershipInfo.message 
+        : '订单创建成功，请完成支付'
     })
   } catch (error) {
     console.error('创建订单失败:', error)
@@ -333,18 +356,20 @@ export async function PUT(request: NextRequest) {
           where: { userId: order.userId }
         })
 
-        const startDate = new Date()
-        const endDate = new Date()
-        endDate.setDate(endDate.getDate() + order.products.duration)
-
+        const now = new Date()
+        
         if (existingMembership) {
           // 如果已有会员，延长会员时间
-          const newEndDate = new Date(existingMembership.endDate)
+          // 如果会员已过期，从当前时间开始计算；否则从原有结束时间延长
+          const currentEndDate = new Date(existingMembership.endDate)
+          const baseDate = currentEndDate > now ? currentEndDate : now
+          const newEndDate = new Date(baseDate)
           newEndDate.setDate(newEndDate.getDate() + order.products.duration)
           
           await prisma.user_memberships.update({
             where: { userId: order.userId },
             data: {
+              startDate: currentEndDate > now ? existingMembership.startDate : now,
               endDate: newEndDate,
               active: true,
               updatedAt: new Date()
@@ -352,6 +377,10 @@ export async function PUT(request: NextRequest) {
           })
         } else {
           // 创建新会员
+          const startDate = now
+          const endDate = new Date(now)
+          endDate.setDate(endDate.getDate() + order.products.duration)
+          
           await prisma.user_memberships.create({
             data: {
               id: `membership_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -366,7 +395,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const updatedOrder = await prisma.orders.update({
-      where: { id: orderId },
+      where: { id: targetOrderId },
       data: updateData
     })
 

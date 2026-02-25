@@ -11,6 +11,11 @@ import { PaymentChannelManager } from "@/components/payment-channel-manager"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Package, Key, ShoppingCart, CreditCard } from "lucide-react"
 import prisma from "@/lib/prisma"
+import {
+  getPaymentChannelDefinitions,
+  mergeAllChannelsWithStatuses,
+  type PaymentChannelStatus,
+} from "@/lib/payment-channels"
 
 export const metadata = {
   title: "商店管理 | SysLog 管理后台",
@@ -81,36 +86,20 @@ export default async function AdminShopPage() {
     }
   })
 
-  // 获取支付渠道列表，如果没有则初始化默认渠道
-  let paymentChannels = await prisma.payment_channels.findMany()
-  
-  if (paymentChannels.length === 0) {
-    // 初始化默认支付渠道
-    const defaultChannels = [
-      {
-        id: `channel_wechat_${Date.now()}`,
-        code: 'wechat',
-        name: '微信支付',
-        description: '支持微信扫码支付、H5支付等多种支付方式',
-        enabled: false,
-        config: '{}'
-      },
-      {
-        id: `channel_alipay_${Date.now() + 1}`,
-        code: 'alipay',
-        name: '支付宝',
-        description: '支持支付宝扫码支付、H5支付等多种支付方式',
-        enabled: false,
-        config: '{}'
-      }
-    ]
-    
-    for (const channel of defaultChannels) {
-      await prisma.payment_channels.create({ data: channel })
-    }
-    
-    paymentChannels = await prisma.payment_channels.findMany()
-  }
+  // 获取支付渠道状态（从数据库）
+  const channelStatusesFromDb = await prisma.payment_channels.findMany()
+
+  // 转换为标准格式
+  const statuses: PaymentChannelStatus[] = channelStatusesFromDb.map(ch => ({
+    code: ch.code,
+    enabled: ch.enabled,
+    config: typeof ch.config === 'string' ? JSON.parse(ch.config) : ch.config,
+    updatedAt: ch.updatedAt
+  }))
+
+  // 合并代码定义和数据库状态
+  // 渠道定义由代码管理，数据库仅存储启用状态和配置信息
+  const paymentChannels = mergeAllChannelsWithStatuses(statuses)
 
   return (
     <main className="min-h-screen bg-background noise-bg">

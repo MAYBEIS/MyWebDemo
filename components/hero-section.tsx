@@ -29,6 +29,71 @@ const DEFAULT_SETTINGS: SiteSettings = {
   terminal_content: 'lang:    C, Rust, Go, Python\nsystems: Linux, RTOS, Embedded\nfocus:   Kernel, Networking, Perf\neditor:  Neovim, VS Code',
 }
 
+// 骨架屏组件
+function HeroSkeleton() {
+  return (
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden noise-bg">
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-primary/[0.04] rounded-full blur-[100px]" />
+        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-primary/[0.02] rounded-full blur-[80px]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-background via-transparent to-background" />
+        <div className="absolute inset-0 bg-gradient-to-r from-background/60 via-transparent to-background/60" />
+      </div>
+
+      <div className="relative z-10 mx-auto max-w-4xl px-6 text-center pt-16">
+        {/* Badge skeleton */}
+        <div className="animate-slide-up">
+          <div className="inline-flex items-center gap-2.5 rounded-full border border-primary/20 bg-primary/[0.06] px-4 py-2 mb-10">
+            <div className="h-2 w-2 rounded-full bg-muted/30 animate-pulse" />
+            <div className="h-4 w-40 bg-muted/30 rounded animate-pulse" />
+          </div>
+        </div>
+
+        {/* Title skeleton */}
+        <div className="space-y-4 animate-slide-up-delay-1">
+          <div className="flex items-center justify-center gap-2">
+            <div className="h-12 w-24 bg-muted/30 rounded animate-pulse" />
+            <div className="h-12 w-32 bg-muted/30 rounded animate-pulse" />
+          </div>
+          <div className="h-8 w-64 mx-auto bg-muted/30 rounded animate-pulse" />
+        </div>
+
+        {/* Description skeleton */}
+        <div className="mt-7 max-w-2xl mx-auto space-y-2 animate-slide-up-delay-2">
+          <div className="h-5 w-full bg-muted/30 rounded animate-pulse" />
+          <div className="h-5 w-3/4 mx-auto bg-muted/30 rounded animate-pulse" />
+        </div>
+
+        {/* Buttons skeleton */}
+        <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center animate-slide-up-delay-2">
+          <div className="h-12 w-32 bg-muted/30 rounded-lg animate-pulse" />
+          <div className="h-12 w-32 bg-muted/30 rounded-lg animate-pulse" />
+        </div>
+
+        {/* Terminal skeleton */}
+        <div className="mt-16 mx-auto max-w-xl">
+          <div className="rounded-xl border border-border/60 bg-card/60 overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border/40 bg-secondary/20">
+              <div className="flex items-center gap-1.5">
+                <div className="h-2.5 w-2.5 rounded-full bg-muted/30 animate-pulse" />
+                <div className="h-2.5 w-2.5 rounded-full bg-muted/30 animate-pulse" />
+                <div className="h-2.5 w-2.5 rounded-full bg-muted/30 animate-pulse" />
+              </div>
+              <div className="ml-2 h-3 w-32 bg-muted/30 rounded animate-pulse" />
+            </div>
+            <div className="p-5 font-mono text-sm space-y-1.5">
+              <div className="h-4 w-48 bg-muted/30 rounded animate-pulse" />
+              <div className="h-4 w-56 bg-muted/30 rounded animate-pulse" />
+              <div className="h-4 w-52 bg-muted/30 rounded animate-pulse" />
+              <div className="h-4 w-48 bg-muted/30 rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function GridBackground() {
   return (
     <div className="absolute inset-0 overflow-hidden">
@@ -123,6 +188,7 @@ function TerminalWindow({ title, command, content }: TerminalWindowProps) {
 
 export function HeroSection() {
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SETTINGS)
+  const [isSettingsLoaded, setIsSettingsLoaded] = useState(false)
   const [currentTextIndex, setCurrentTextIndex] = useState(0)
   const [displayText, setDisplayText] = useState("")
   const [isDeleting, setIsDeleting] = useState(false)
@@ -138,6 +204,8 @@ export function HeroSection() {
         }
       } catch (error) {
         console.error('获取设置失败:', error)
+      } finally {
+        setIsSettingsLoaded(true)
       }
     }
     fetchSettings()
@@ -166,6 +234,11 @@ export function HeroSection() {
     const timeout = setTimeout(animate, isDeleting ? 40 : 90)
     return () => clearTimeout(timeout)
   }, [animate, isDeleting])
+
+  // 如果设置未加载完成，显示骨架屏
+  if (!isSettingsLoaded) {
+    return <HeroSkeleton />
+  }
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden noise-bg">

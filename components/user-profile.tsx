@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   User,
   Mail,
@@ -49,7 +50,7 @@ function getAvatarInitials(name: string, avatar: string | null): string {
 }
 
 export function UserProfile() {
-  const { user, isLoggedIn } = useAuth()
+  const { user, isLoggedIn, isLoading: authLoading } = useAuth()
   const router = useRouter()
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState("")
@@ -75,6 +76,60 @@ export function UserProfile() {
     } catch (error) {
       console.error('获取会员信息失败:', error)
     }
+  }
+
+  // 认证加载中时显示骨架屏
+  if (authLoading) {
+    return (
+      <div>
+        <Skeleton className="h-4 w-20 mb-3" />
+        <Skeleton className="h-10 w-32 mb-14" />
+        
+        {/* Profile Card Skeleton */}
+        <div className="rounded-xl border border-border/40 bg-card/30 p-8 mb-8">
+          <div className="flex flex-col gap-8 md:flex-row md:items-start">
+            {/* Avatar Skeleton */}
+            <div className="relative shrink-0">
+              <Skeleton className="h-24 w-24 rounded-full" />
+            </div>
+            
+            {/* Info Skeleton */}
+            <div className="flex-1 min-w-0 space-y-4">
+              <Skeleton className="h-8 w-40" />
+              <Skeleton className="h-4 w-64" />
+              <Skeleton className="h-4 w-48" />
+              <div className="flex gap-2 mt-6">
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-8 w-24" />
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* 会员状态卡片 Skeleton */}
+        <div className="rounded-xl border border-border/40 bg-card/30 p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <Skeleton className="h-6 w-24" />
+            <Skeleton className="h-8 w-24" />
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-4 w-40" />
+            </div>
+          </div>
+        </div>
+        
+        {/* 快捷入口 Skeleton */}
+        <div className="rounded-xl border border-border/40 bg-card/30 p-6">
+          <Skeleton className="h-6 w-24 mb-4" />
+          <div className="flex gap-4">
+            <Skeleton className="h-9 w-24" />
+            <Skeleton className="h-9 w-24" />
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (!isLoggedIn || !user) {

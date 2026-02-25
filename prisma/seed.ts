@@ -12,14 +12,40 @@ async function main() {
   console.log('🌱 开始播种数据库...')
 
   // 清理现有数据
+  // await prisma.comment_likes.deleteMany()
   await prisma.comments.deleteMany()
   await prisma.post_tags.deleteMany()
+  await prisma.post_likes.deleteMany()
+  await prisma.post_bookmarks.deleteMany()
   await prisma.posts.deleteMany()
   await prisma.guestbooks.deleteMany()
   await prisma.sessions.deleteMany()
+  await prisma.user_coupons.deleteMany()
+  await prisma.coupons.deleteMany()
+  await prisma.product_keys.deleteMany()
+  await prisma.orders.deleteMany()
+  await prisma.user_memberships.deleteMany()
+  await prisma.products.deleteMany()
+  await prisma.payment_channels.deleteMany()
   await prisma.users.deleteMany()
+  await prisma.system_settings.deleteMany()
 
   console.log('✅ 清理完成')
+
+  // 创建系统设置
+  await prisma.system_settings.createMany({
+    data: [
+      { id: `setting_${Date.now()}_1`, key: 'site_title', value: 'SysLog', description: '网站标题' },
+      { id: `setting_${Date.now()}_2`, key: 'site_description', value: '一个现代化的技术博客', description: '网站描述' },
+      { id: `setting_${Date.now()}_3`, key: 'comment_max_depth', value: '3', description: '评论最大深度' },
+      { id: `setting_${Date.now()}_4`, key: 'section_blog_enabled', value: 'true', description: '博客模块开关' },
+      { id: `setting_${Date.now()}_5`, key: 'section_shop_enabled', value: 'true', description: '商店模块开关' },
+      { id: `setting_${Date.now()}_6`, key: 'section_trending_enabled', value: 'true', description: '热榜模块开关' },
+      { id: `setting_${Date.now()}_7`, key: 'section_quiz_enabled', value: 'true', description: '每日挑战模块开关' },
+      { id: `setting_${Date.now()}_8`, key: 'section_guestbook_enabled', value: 'true', description: '留言板模块开关' },
+    ],
+  })
+  console.log('✅ 创建系统设置')
 
   // 创建管理员用户
   const hashedAdminPassword = await bcrypt.hash('admin123', 12)
@@ -39,19 +65,69 @@ async function main() {
 
   // 创建普通用户
   const hashedUserPassword = await bcrypt.hash('user123', 12)
-  const user = await prisma.users.create({
-    data: {
-      id: `user_${Date.now()}_user`,
-      email: 'user@example.com',
-      name: '普通用户',
-      password: hashedUserPassword,
-      isAdmin: false,
-      avatar: 'PT',
-      bio: '热爱编程的开发者',
-      updatedAt: new Date(),
-    },
-  })
-  console.log('✅ 创建普通用户:', user.email)
+  const users = await Promise.all([
+    prisma.users.create({
+      data: {
+        id: `user_${Date.now()}_user1`,
+        email: 'user@example.com',
+        name: '张三',
+        password: hashedUserPassword,
+        isAdmin: false,
+        avatar: 'ZS',
+        bio: '热爱编程的开发者',
+        updatedAt: new Date(),
+      },
+    }),
+    prisma.users.create({
+      data: {
+        id: `user_${Date.now()}_user2`,
+        email: 'lisi@example.com',
+        name: '李四',
+        password: hashedUserPassword,
+        isAdmin: false,
+        avatar: 'LS',
+        bio: '前端工程师',
+        updatedAt: new Date(),
+      },
+    }),
+    prisma.users.create({
+      data: {
+        id: `user_${Date.now()}_user3`,
+        email: 'wangwu@example.com',
+        name: '王五',
+        password: hashedUserPassword,
+        isAdmin: false,
+        avatar: 'WW',
+        bio: '后端开发者',
+        updatedAt: new Date(),
+      },
+    }),
+    prisma.users.create({
+      data: {
+        id: `user_${Date.now()}_user4`,
+        email: 'zhaoliu@example.com',
+        name: '赵六',
+        password: hashedUserPassword,
+        isAdmin: false,
+        avatar: 'ZL',
+        bio: '全栈工程师',
+        updatedAt: new Date(),
+      },
+    }),
+    prisma.users.create({
+      data: {
+        id: `user_${Date.now()}_user5`,
+        email: 'sunqi@example.com',
+        name: '孙七',
+        password: hashedUserPassword,
+        isAdmin: false,
+        avatar: 'SQ',
+        bio: '移动端开发者',
+        updatedAt: new Date(),
+      },
+    }),
+  ])
+  console.log('✅ 创建普通用户:', users.length, '个')
 
   // 创建示例文章
   const posts = await Promise.all([
@@ -96,6 +172,8 @@ App Router 代表了 React 应用的未来方向，值得深入学习和实践�
         category: '前端开发',
         coverImage: '/images/blog/nextjs.jpg',
         published: true,
+        views: 1256,
+        likes: 89,
         authorId: admin.id,
         updatedAt: new Date(),
         post_tags: {
@@ -148,6 +226,8 @@ const config = {
         category: '编程语言',
         coverImage: '/images/blog/typescript.jpg',
         published: true,
+        views: 987,
+        likes: 67,
         authorId: admin.id,
         updatedAt: new Date(),
         post_tags: {
@@ -196,6 +276,8 @@ Hooks 是 React 开发的核心技能。`,
         category: '前端开发',
         coverImage: '/images/blog/react.jpg',
         published: true,
+        views: 2341,
+        likes: 156,
         authorId: admin.id,
         updatedAt: new Date(),
         post_tags: {
@@ -207,9 +289,360 @@ Hooks 是 React 开发的核心技能。`,
         },
       },
     }),
+    prisma.posts.create({
+      data: {
+        id: `post_${Date.now()}_4`,
+        slug: 'nodejs-performance-optimization',
+        title: 'Node.js 性能优化实战',
+        content: `# Node.js 性能优化实战
+
+Node.js 应用的性能优化是后端开发中的重要课题。
+
+## 内存管理
+
+理解 V8 的垃圾回收机制，避免内存泄漏。
+
+## 异步优化
+
+合理使用 Promise 和 async/await，避免阻塞事件循环。
+
+## 集群模式
+
+利用 cluster 模块充分利用多核 CPU。
+
+## 总结
+
+性能优化需要持续关注和测试。`,
+        excerpt: '提升 Node.js 应用性能的实用技巧',
+        category: '后端开发',
+        coverImage: '/images/blog/nodejs.jpg',
+        published: true,
+        views: 876,
+        likes: 45,
+        authorId: admin.id,
+        updatedAt: new Date(),
+        post_tags: {
+          create: [
+            { id: `tag_${Date.now()}_10`, tag: 'Node.js' },
+            { id: `tag_${Date.now()}_11`, tag: '性能优化' },
+            { id: `tag_${Date.now()}_12`, tag: '后端' },
+          ],
+        },
+      },
+    }),
+    prisma.posts.create({
+      data: {
+        id: `post_${Date.now()}_5`,
+        slug: 'docker-containerization-guide',
+        title: 'Docker 容器化部署指南',
+        content: `# Docker 容器化部署指南
+
+Docker 让应用部署变得更加简单和一致。
+
+## Dockerfile 编写
+
+\`\`\`dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]
+\`\`\`
+
+## Docker Compose
+
+使用 Docker Compose 管理多容器应用。
+
+## 最佳实践
+
+1. 使用多阶段构建减小镜像体积
+2. 合理利用缓存层
+3. 注意安全性配置
+
+## 总结
+
+容器化是现代应用部署的标准做法。`,
+        excerpt: '从零开始学习 Docker 容器化部署',
+        category: 'DevOps',
+        coverImage: '/images/blog/docker.jpg',
+        published: true,
+        views: 654,
+        likes: 38,
+        authorId: admin.id,
+        updatedAt: new Date(),
+        post_tags: {
+          create: [
+            { id: `tag_${Date.now()}_13`, tag: 'Docker' },
+            { id: `tag_${Date.now()}_14`, tag: 'DevOps' },
+            { id: `tag_${Date.now()}_15`, tag: '容器化' },
+          ],
+        },
+      },
+    }),
+    prisma.posts.create({
+      data: {
+        id: `post_${Date.now()}_6`,
+        slug: 'rust-system-programming',
+        title: 'Rust 系统编程入门',
+        content: `# Rust 系统编程入门
+
+Rust 是一门专注于安全和性能的系统编程语言。
+
+## 所有权系统
+
+Rust 的所有权系统是其核心特性，确保内存安全。
+
+## 借用和生命周期
+
+理解借用规则和生命周期标注。
+
+## 异步编程
+
+使用 async/await 进行异步编程。
+
+## 总结
+
+Rust 学习曲线陡峭，但值得投入。`,
+        excerpt: 'Rust 语言基础与系统编程实践',
+        category: '系统编程',
+        coverImage: '/images/blog/rust.jpg',
+        published: true,
+        views: 543,
+        likes: 29,
+        authorId: admin.id,
+        updatedAt: new Date(),
+        post_tags: {
+          create: [
+            { id: `tag_${Date.now()}_16`, tag: 'Rust' },
+            { id: `tag_${Date.now()}_17`, tag: '系统编程' },
+            { id: `tag_${Date.now()}_18`, tag: '内存安全' },
+          ],
+        },
+      },
+    }),
   ])
 
   console.log('✅ 创建示例文章:', posts.length, '篇')
+
+  // 创建示例评论
+  const user1 = users[0]
+  const user2 = users[1]
+  const user3 = users[2]
+
+  // 文章1的评论
+  const comment1 = await prisma.comments.create({
+    data: {
+      id: `comment_${Date.now()}_1`,
+      content: '非常详细的教程，学到了很多！',
+      postId: posts[0].id,
+      authorId: user1.id,
+      updatedAt: new Date(),
+    },
+  })
+
+  const comment2 = await prisma.comments.create({
+    data: {
+      id: `comment_${Date.now()}_2`,
+      content: 'App Router 确实很强大，但迁移成本也不小。',
+      postId: posts[0].id,
+      authorId: user2.id,
+      updatedAt: new Date(),
+    },
+  })
+
+  // 回复评论
+  await prisma.comments.create({
+    data: {
+      id: `comment_${Date.now()}_3`,
+      content: '是的，但长期来看是值得的。',
+      postId: posts[0].id,
+      authorId: admin.id,
+      parentId: comment2.id,
+      updatedAt: new Date(),
+    },
+  })
+
+  // 文章2的评论
+  await prisma.comments.create({
+    data: {
+      id: `comment_${Date.now()}_4`,
+      content: 'TypeScript 的类型系统真的很强大！',
+      postId: posts[1].id,
+      authorId: user3.id,
+      updatedAt: new Date(),
+    },
+  })
+
+  await prisma.comments.create({
+    data: {
+      id: `comment_${Date.now()}_5`,
+      content: '建议增加一些高级类型的讲解。',
+      postId: posts[1].id,
+      authorId: user1.id,
+      updatedAt: new Date(),
+    },
+  })
+
+  // 文章3的评论
+  await prisma.comments.create({
+    data: {
+      id: `comment_${Date.now()}_6`,
+      content: 'Hooks 刚出来时很不习惯，现在离不开了。',
+      postId: posts[2].id,
+      authorId: user2.id,
+      updatedAt: new Date(),
+    },
+  })
+
+  console.log('✅ 创建示例评论')
+
+  // 创建产品
+  const products = await Promise.all([
+    prisma.products.create({
+      data: {
+        id: `product_${Date.now()}_1`,
+        name: '月度会员',
+        description: '享受30天的会员特权，包括专属内容和优先支持',
+        price: 29.9,
+        type: 'membership',
+        duration: 30,
+        features: JSON.stringify(['专属文章', '优先客服', '无广告体验']),
+        stock: -1,
+        status: true,
+        sortOrder: 1,
+      },
+    }),
+    prisma.products.create({
+      data: {
+        id: `product_${Date.now()}_2`,
+        name: '年度会员',
+        description: '享受365天的会员特权，性价比之选',
+        price: 199,
+        type: 'membership',
+        duration: 365,
+        features: JSON.stringify(['专属文章', '优先客服', '无广告体验', '专属徽章']),
+        stock: -1,
+        status: true,
+        sortOrder: 2,
+      },
+    }),
+    prisma.products.create({
+      data: {
+        id: `product_${Date.now()}_3`,
+        name: '高级开发工具包',
+        description: '包含一套完整的开发工具和模板',
+        price: 99,
+        type: 'digital',
+        features: JSON.stringify(['源码模板', '开发文档', '技术支持']),
+        stock: 100,
+        status: true,
+        sortOrder: 3,
+      },
+    }),
+  ])
+
+  console.log('✅ 创建产品:', products.length, '个')
+
+  // 创建产品密钥
+  await prisma.product_keys.createMany({
+    data: Array.from({ length: 10 }, (_, i) => ({
+      id: `key_${Date.now()}_${i}`,
+      productId: products[2].id,
+      key: `DEV-TOOL-${Math.random().toString(36).substr(2, 8).toUpperCase()}`,
+      status: 'available',
+    })),
+  })
+
+  console.log('✅ 创建产品密钥: 10 个')
+
+  // 创建优惠券
+  await prisma.coupons.create({
+    data: {
+      id: `coupon_${Date.now()}_1`,
+      code: 'WELCOME10',
+      name: '新用户欢迎优惠券',
+      type: 'percentage',
+      value: 10,
+      minAmount: 50,
+      maxDiscount: 20,
+      totalCount: 100,
+      usedCount: 0,
+      startTime: new Date(),
+      endTime: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      status: true,
+    },
+  })
+
+  console.log('✅ 创建优惠券')
+
+  // 创建支付渠道
+  await prisma.payment_channels.createMany({
+    data: [
+      {
+        id: `channel_${Date.now()}_1`,
+        code: 'wechat',
+        name: '微信支付',
+        description: '使用微信扫码支付',
+        enabled: true,
+        config: JSON.stringify({ appId: '', mchId: '', apiKey: '' }),
+      },
+      {
+        id: `channel_${Date.now()}_2`,
+        code: 'alipay',
+        name: '支付宝',
+        description: '使用支付宝扫码支付',
+        enabled: false,
+        config: JSON.stringify({ appId: '', privateKey: '' }),
+      },
+    ],
+  })
+
+  console.log('✅ 创建支付渠道')
+
+  // 创建示例订单
+  await prisma.orders.create({
+    data: {
+      id: `order_${Date.now()}_1`,
+      orderNo: `ORD${new Date().toISOString().slice(0, 10).replace(/-/g, '')}TEST01`,
+      userId: user1.id,
+      productId: products[0].id,
+      amount: 29.9,
+      status: 'paid',
+      paymentMethod: 'wechat',
+      paymentTime: new Date(),
+      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2天前
+    },
+  })
+
+  await prisma.orders.create({
+    data: {
+      id: `order_${Date.now()}_2`,
+      orderNo: `ORD${new Date().toISOString().slice(0, 10).replace(/-/g, '')}TEST02`,
+      userId: user2.id,
+      productId: products[1].id,
+      amount: 199,
+      status: 'paid',
+      paymentMethod: 'wechat',
+      paymentTime: new Date(),
+      createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1天前
+    },
+  })
+
+  await prisma.orders.create({
+    data: {
+      id: `order_${Date.now()}_3`,
+      orderNo: `ORD${new Date().toISOString().slice(0, 10).replace(/-/g, '')}TEST03`,
+      userId: user3.id,
+      productId: products[2].id,
+      amount: 99,
+      status: 'pending',
+      createdAt: new Date(),
+    },
+  })
+
+  console.log('✅ 创建示例订单')
 
   // 创建示例留言
   await prisma.guestbooks.createMany({
@@ -217,13 +650,19 @@ Hooks 是 React 开发的核心技能。`,
       {
         id: `guestbook_${Date.now()}_1`,
         message: '很棒的博客！内容很有深度，学到了很多。',
-        authorId: user.id,
+        authorId: user1.id,
         updatedAt: new Date(),
       },
       {
         id: `guestbook_${Date.now()}_2`,
         message: '期待更多关于系统编程的文章！',
-        authorId: user.id,
+        authorId: user2.id,
+        updatedAt: new Date(),
+      },
+      {
+        id: `guestbook_${Date.now()}_3`,
+        message: '设计很漂亮，阅读体验很好！',
+        authorId: user3.id,
         updatedAt: new Date(),
       },
     ],
@@ -235,7 +674,12 @@ Hooks 是 React 开发的核心技能。`,
   console.log('')
   console.log('📝 测试账号信息:')
   console.log('   管理员: admin@example.com / admin123')
-  console.log('   用户: user@example.com / user123')
+  console.log('   普通用户: user@example.com / user123')
+  console.log('')
+  console.log('📊 数据统计:')
+  console.log(`   用户: ${users.length + 1} 个`)
+  console.log(`   文章: ${posts.length} 篇`)
+  console.log(`   产品: ${products.length} 个`)
 }
 
 main()

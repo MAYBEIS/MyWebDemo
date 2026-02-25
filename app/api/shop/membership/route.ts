@@ -1,42 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { verifyToken } from '@/lib/auth-service'
 
 // 获取当前用户的会员信息
 export async function GET(request: NextRequest) {
   try {
-    // 从 cookie 获取用户信息
-    const cookieHeader = request.headers.get('cookie')
-    if (!cookieHeader) {
+    // 尝试从多个 cookie 获取认证信息
+    const token = request.cookies.get('auth_token')?.value || request.cookies.get('token')?.value
+    if (!token) {
       return NextResponse.json({ success: false, error: '未登录' }, { status: 401 })
     }
 
-    // 解析 cookie 获取用户 ID
-    const cookies = Object.fromEntries(
-      cookieHeader.split('; ').map(c => {
-        const [key, ...v] = c.split('=')
-        return [key, v.join('=')]
-      })
-    )
-
-    let userId = null
-    if (cookies.auth_token) {
-      try {
-        const decoded = Buffer.from(cookies.auth_token, 'base64').toString()
-        const authData = JSON.parse(decoded)
-        userId = authData.userId
-      } catch {
-        return NextResponse.json({ success: false, error: '无效的认证信息' }, { status: 401 })
-      }
+    const user = await verifyToken(token)
+    if (!user) {
+      return NextResponse.json({ success: false, error: '登录已过期' }, { status: 401 })
     }
 
-    if (!userId) {
-      return NextResponse.json({ success: false, error: '未登录' }, { status: 401 })
-    }
-
-    // 查询用户的有效会员信息
+    // 查询用户的会员信息
     const membership = await prisma.user_memberships.findUnique({
       where: {
-        userId
+        userId: user.id
       }
     })
 

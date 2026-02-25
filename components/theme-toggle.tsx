@@ -21,20 +21,21 @@ export function ThemeToggle() {
     setMounted(true)
   }, [])
 
+  // 使用固定尺寸的占位符，避免水合时不匹配
   if (!mounted) {
     return (
       <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-        <Sun className="h-4 w-4" />
+        <span className="h-4 w-4" />
       </Button>
     )
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-secondary/40">
-          <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-secondary/40 relative">
+          <Sun className="h-4 w-4 rotate-0 scale-100 transition-all duration-200 dark:-rotate-90 dark:scale-0 absolute" />
+          <Moon className="h-4 w-4 rotate-90 scale-0 transition-all duration-200 dark:rotate-0 dark:scale-100 absolute" />
           <span className="sr-only">切换主题</span>
         </Button>
       </DropdownMenuTrigger>

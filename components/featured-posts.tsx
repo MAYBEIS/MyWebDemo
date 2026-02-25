@@ -5,7 +5,7 @@ import Link from "next/link"
 import { ArrowRight, Clock, Eye, Heart } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useInView } from "@/hooks/use-in-view"
-import { fetchFeaturedPosts, formatDate, calculateReadTime, formatViews, type Post } from "@/lib/api-posts"
+import { fetchFeaturedPosts, formatDate, formatLastCommentTime, formatViews, type Post } from "@/lib/api-posts"
 
 export function FeaturedPosts() {
   const ref = useRef<HTMLDivElement>(null)
@@ -148,7 +148,7 @@ export function FeaturedPosts() {
               <div className="relative mt-8 flex items-center gap-4">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
                   <Clock className="h-3.5 w-3.5" />
-                  {calculateReadTime(posts[0].content)}
+                  {formatLastCommentTime(posts[0].lastCommentAt)}
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
                   <Eye className="h-3.5 w-3.5" />
@@ -188,14 +188,14 @@ export function FeaturedPosts() {
                   </p>
                 </div>
                 <div className="mt-5 flex items-center gap-4">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
-                    <Clock className="h-3 w-3" />
-                    {calculateReadTime(post.content)}
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
-                    <Eye className="h-3 w-3" />
-                    {formatViews(post.views)}
-                  </div>
+                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
+                     <Clock className="h-3 w-3" />
+                     {formatLastCommentTime(post.lastCommentAt)}
+                   </div>
+                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
+                     <Eye className="h-3 w-3" />
+                     {formatViews(post.views)}
+                   </div>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
                     <Heart className="h-3 w-3" />
                     {post.likes}
