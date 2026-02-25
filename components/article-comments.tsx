@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { MessageSquare, ThumbsUp, Reply, ChevronDown, ChevronUp, Send, Trash2, Pencil, Loader2, Check, X } from "lucide-react"
+import { useState, useEffect } from "react"
+import { MessageSquare, ThumbsUp, Reply, ChevronDown, ChevronUp, Send, Trash2, Pencil, Loader2, Check, X, RotateCcw } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -48,6 +48,9 @@ interface Comment {
   id: string
   content: string
   createdAt: Date
+  likes: number
+  isRecalled: boolean
+  isLiked: boolean
   author: Author
   replies: Comment[]
 }
@@ -60,6 +63,9 @@ interface CommentResponse {
   id: string
   content: string
   createdAt: Date
+  likes: number
+  isRecalled: boolean
+  isLiked: boolean
   author: Author
   replies: Comment[]
 }
@@ -77,22 +83,24 @@ interface ApiResponse {
 function CommentItem({
   comment,
   depth,
-  likedSet,
   onLike,
   onReply,
   onDelete,
   onEdit,
+  onRecall,
   currentUserId,
+  isAdmin,
   maxDepth,
 }: {
   comment: Comment
   depth: number
-  likedSet: Set<string>
-  onLike: (id: string) => void
+  onLike: (id: string, isLiked: boolean) => void
   onReply: (parentId: string, content: string) => void
   onDelete: (id: string) => void
   onEdit: (id: string, content: string) => void
+  onRecall: (id: string) => void
   currentUserId?: string
+  isAdmin?: boolean
   maxDepth: number
 }) {
   const [showReplyInput, setShowReplyInput] = useState(false)
@@ -102,6 +110,7 @@ function CommentItem({
   const [isEditing, setIsEditing] = useState(false)
   const [editText, setEditText] = useState(comment.content)
   const [isSaving, setIsSaving] = useState(false)
+  const [isLiking, setIsLiking] = useState(false)
   const { isLoggedIn } = useAuth()
 
   const handleReply = () => {
@@ -126,13 +135,28 @@ function CommentItem({
     }
   }
 
+  // 处理点赞
+  const handleLike = async () => {
+    if (isLiking) return
+    setIsLiking(true)
+    try {
+      await onLike(comment.id, comment.isLiked)
+    } finally {
+      setIsLiking(false)
+    }
+  }
+
   const isAuthor = comment.author.isAdmin
-  const canEdit = currentUserId && (currentUserId === comment.author.id || comment.author.isAdmin)
-  const canDelete = currentUserId && (currentUserId === comment.author.id || comment.author.isAdmin)
+  // 只有评论作者本人可以编辑自己的评论（且评论未撤回）
+  const canEdit = currentUserId && currentUserId === comment.author.id && !comment.isRecalled
+  // 评论作者可以撤回自己的评论（且评论未撤回）
+  const canRecall = currentUserId && currentUserId === comment.author.id && !comment.isRecalled
+  // 只有管理员可以删除评论
+  const canDelete = isAdmin
 
   return (
     <div className={`${depth > 0 ? "ml-8 pl-4 border-l border-border/20" : ""}`}>
-      <div className="rounded-xl border border-border/30 bg-card/20 p-5 transition-all duration-300 hover:bg-card/40 hover:border-border/50">
+      <div className={`rounded-xl border border-border/30 bg-card/20 p-5 transition-all duration-300 hover:bg-card/40 hover:border-border/50 ${comment.isRecalled ? 'opacity-60' : ''}`}>
         <div className="flex items-center gap-3 mb-3">
           <Avatar className="h-8 w-8 border border-border/40">
             <AvatarFallback className={`text-xs font-mono ${isAuthor ? "bg-primary/15 text-primary" : "bg-primary/8 text-primary/80"}`}>
@@ -149,6 +173,11 @@ function CommentItem({
               </span>
             )}
             <span className="text-xs text-muted-foreground/40">{formatTime(comment.createdAt)}</span>
+            {comment.isRecalled && (
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-muted/30 text-muted-foreground border border-border/15">
+                已撤回
+              </span>
+            )}
           </div>
         </div>
         {/* 内容：编辑模式或显示模式 */}
@@ -181,33 +210,41 @@ function CommentItem({
             </div>
           </div>
         ) : (
-          <p className="text-sm text-foreground/70 leading-relaxed mb-4 pl-11">
+          <p className={`text-sm leading-relaxed mb-4 pl-11 ${comment.isRecalled ? 'text-muted-foreground/50 italic' : 'text-foreground/70'}`}>
             {comment.content}
           </p>
         )}
         <div className="flex items-center gap-4 pl-11">
+          {/* 点赞按钮 */}
           <button
-            onClick={() => onLike(comment.id)}
+            onClick={handleLike}
+            disabled={isLiking || !isLoggedIn}
             className={`flex items-center gap-1.5 text-xs transition-colors duration-300 ${
-              likedSet.has(comment.id) ? "text-primary" : "text-muted-foreground/40 hover:text-primary"
-            }`}
+              comment.isLiked 
+                ? "text-primary" 
+                : "text-muted-foreground/40 hover:text-primary"
+            } ${!isLoggedIn ? 'cursor-not-allowed opacity-50' : ''}`}
           >
-            <ThumbsUp className={`h-3.5 w-3.5 ${likedSet.has(comment.id) ? "fill-current" : ""}`} />
-            点赞
+            <ThumbsUp className={`h-3.5 w-3.5 ${comment.isLiked ? "fill-current" : ""}`} />
+            点赞 {comment.likes > 0 && `(${comment.likes})`}
           </button>
-          <button
-            onClick={() => {
-              if (!isLoggedIn) {
-                toast.error("请先登录后再回复")
-                return
-              }
-              setShowReplyInput(true)
-            }}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground/40 hover:text-primary transition-colors duration-300"
-          >
-            <Reply className="h-3.5 w-3.5" />
-            回复
-          </button>
+          {/* 回复按钮 */}
+          {!comment.isRecalled && (
+            <button
+              onClick={() => {
+                if (!isLoggedIn) {
+                  toast.error("请先登录后再回复")
+                  return
+                }
+                setShowReplyInput(true)
+              }}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground/40 hover:text-primary transition-colors duration-300"
+            >
+              <Reply className="h-3.5 w-3.5" />
+              回复
+            </button>
+          )}
+          {/* 删除按钮 - 仅管理员可见 */}
           {canDelete && (
             <button
               onClick={() => onDelete(comment.id)}
@@ -217,6 +254,7 @@ function CommentItem({
               删除
             </button>
           )}
+          {/* 编辑按钮 - 仅评论作者可见 */}
           {canEdit && (
             <button
               onClick={() => {
@@ -229,15 +267,26 @@ function CommentItem({
               编辑
             </button>
           )}
-            {comment.replies && comment.replies.length > 0 && (
-              <button
-                onClick={() => setShowReplies(!showReplies)}
-                className="flex items-center gap-1 text-xs text-muted-foreground/40 hover:text-primary transition-colors duration-300 ml-auto"
-              >
-                {showReplies ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                {comment.replies.length} 条回复
-              </button>
-            )}
+          {/* 撤回按钮 - 仅评论作者可见 */}
+          {canRecall && (
+            <button
+              onClick={() => onRecall(comment.id)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground/20 hover:text-orange-500 transition-colors duration-300"
+            >
+              <RotateCcw className="h-3 w-3" />
+              撤回
+            </button>
+          )}
+          {/* 展开回复 */}
+          {comment.replies && comment.replies.length > 0 && (
+            <button
+              onClick={() => setShowReplies(!showReplies)}
+              className="flex items-center gap-1 text-xs text-muted-foreground/40 hover:text-primary transition-colors duration-300 ml-auto"
+            >
+              {showReplies ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              {comment.replies.length} 条回复
+            </button>
+          )}
         </div>
 
         {showReplyInput && (
@@ -267,12 +316,13 @@ function CommentItem({
               key={reply.id}
               comment={reply}
               depth={depth + 1}
-              likedSet={likedSet}
               onLike={onLike}
               onReply={onReply}
               onDelete={onDelete}
               onEdit={onEdit}
+              onRecall={onRecall}
               currentUserId={currentUserId}
+              isAdmin={isAdmin}
               maxDepth={maxDepth}
             />
           ))}
@@ -287,7 +337,6 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [newComment, setNewComment] = useState("")
-  const [likedComments, setLikedComments] = useState<Set<string>>(new Set())
   const [maxDepth, setMaxDepth] = useState(3)
   const [hasHiddenComments, setHasHiddenComments] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -371,22 +420,58 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
     }
   }
 
-  const handleLike = (id: string) => {
-    if (likedComments.has(id)) {
-      setLikedComments((prev) => {
-        const next = new Set(prev)
-        next.delete(id)
-        return next
-      })
-    } else {
-      setLikedComments(new Set([...likedComments, id]))
+  // 处理点赞
+  const handleLike = async (id: string, isLiked: boolean) => {
+    if (!isLoggedIn) {
+      toast.error("请先登录后再点赞")
+      return
     }
+
+    try {
+      const response = await fetch('/api/comments', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          id, 
+          action: isLiked ? 'unlike' : 'like' 
+        }),
+      })
+      const result = await response.json()
+      if (result.success) {
+        // 更新本地状态
+        setComments(prev => updateCommentLike(prev, id, !isLiked))
+        toast.success(isLiked ? '取消点赞' : '点赞成功')
+      } else {
+        toast.error(result.error || '操作失败')
+      }
+    } catch (error) {
+      console.error('点赞失败:', error)
+      toast.error('操作失败')
+    }
+  }
+
+  // 递归更新评论的点赞状态
+  const updateCommentLike = (comments: Comment[], targetId: string, isLiked: boolean): Comment[] => {
+    return comments.map(comment => {
+      if (comment.id === targetId) {
+        return {
+          ...comment,
+          isLiked,
+          likes: isLiked ? comment.likes + 1 : comment.likes - 1
+        }
+      }
+      if (comment.replies && comment.replies.length > 0) {
+        return {
+          ...comment,
+          replies: updateCommentLike(comment.replies, targetId, isLiked)
+        }
+      }
+      return comment
+    })
   }
 
   // 处理评论回复
   const handleReply = async (parentId: string, content: string) => {
-    console.log("handleReply called with:", { parentId, content, postId, user: user?.id })
-    
     if (!user) {
       toast.error("请先登录后再回复")
       return
@@ -408,9 +493,7 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
         }),
       })
       
-      console.log("Reply response status:", response.status)
       const result = await response.json()
-      console.log("Reply result:", result)
       
       if (result.success) {
         toast.success("回复成功！")
@@ -424,8 +507,9 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
     }
   }
 
+  // 处理删除（仅管理员）
   const handleDelete = async (commentId: string) => {
-    if (!confirm("确定要删除这条评论吗？")) return
+    if (!confirm("确定要删除这条评论吗？此操作不可恢复。")) return
 
     try {
       const response = await fetch(`/api/comments?id=${commentId}`, {
@@ -465,6 +549,29 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
     }
   }
 
+  // 处理撤回
+  const handleRecall = async (commentId: string) => {
+    if (!confirm("确定要撤回这条评论吗？撤回后其他人将无法看到评论内容。")) return
+
+    try {
+      const response = await fetch('/api/comments', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: commentId, action: 'recall' }),
+      })
+      const result = await response.json()
+      if (result.success) {
+        toast.success('评论已撤回')
+        loadComments(1)
+      } else {
+        toast.error(result.error || '撤回失败')
+      }
+    } catch (error) {
+      console.error('撤回失败:', error)
+      toast.error('撤回失败')
+    }
+  }
+
   // 计算评论总数（包括回复）
   const totalCount = (items: Comment[]): number => {
     if (!items || !Array.isArray(items)) return 0
@@ -485,7 +592,7 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
 
       {/* 有隐藏评论时显示提示 */}
       {hasHiddenComments && (
-        <div className="mb-6 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+        <div className="mb-6 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm dark:bg-amber-950/20 dark:border-amber-800 dark:text-amber-200">
           <p>部分评论因已达到回复深度上限而未显示。如需查看完整评论树，请联系管理员调整评论深度设置。</p>
         </div>
       )}
@@ -550,12 +657,13 @@ export function ArticleComments({ postId }: ArticleCommentsProps) {
                 key={comment.id}
                 comment={comment}
                 depth={0}
-                likedSet={likedComments}
                 onLike={handleLike}
                 onReply={handleReply}
                 onDelete={handleDelete}
                 onEdit={handleEdit}
+                onRecall={handleRecall}
                 currentUserId={user?.id}
+                isAdmin={user?.isAdmin}
                 maxDepth={maxDepth}
               />
             ))}
