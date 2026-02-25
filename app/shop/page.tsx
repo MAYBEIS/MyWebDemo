@@ -376,7 +376,7 @@ export default function ShopPage() {
 
   // 渲染支付方式选项
   const renderPaymentOptions = () => {
-    const options: JSX.Element[] = []
+    const options: React.ReactElement[] = []
     
     availableChannels.forEach((channel) => {
       // 如果渠道支持多种支付方式（如虎皮椒）

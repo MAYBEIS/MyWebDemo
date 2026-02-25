@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         posts: {
           select: { id: true, title: true, slug: true }
         },
-        comments: {
+        other_comments: {
           select: { id: true }
         }
       },
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
             slug: comment.posts.slug,
           } : null,
           parentId: comment.parentId,
-          replyCount: comment.comments?.length || 0,
+          replyCount: comment.other_comments?.length || 0,
         })),
         total,
         page,

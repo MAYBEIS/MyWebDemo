@@ -46,8 +46,9 @@ export async function fetchPosts(options: {
   category?: string
   tag?: string
   search?: string
+  sortBy?: 'createdAt' | 'lastCommentAt' | 'views'
 } = {}): Promise<PostsResponse> {
-  const { page = 1, limit = 10, category, tag, search } = options
+  const { page = 1, limit = 10, category, tag, search, sortBy } = options
 
   // 构建查询参数
   const params = new URLSearchParams()
@@ -56,6 +57,7 @@ export async function fetchPosts(options: {
   if (category) params.set('category', category)
   if (tag) params.set('tag', tag)
   if (search) params.set('search', search)
+  if (sortBy) params.set('sortBy', sortBy)
 
   try {
     const response = await fetch(`/api/posts?${params.toString()}`, {

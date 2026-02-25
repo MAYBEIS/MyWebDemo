@@ -2,14 +2,26 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Clock, Eye, Heart, Search, X, Loader2 } from "lucide-react"
+import { Clock, Eye, Heart, Search, X, Loader2, ArrowUpDown, MessageCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { fetchPosts, fetchCategories, formatDate, formatLastCommentTime, formatViews, type Post } from "@/lib/api-posts"
+
+// 排序选项类型
+type SortOption = 'createdAt' | 'lastCommentAt' | 'views'
+
+// 排序选项配置
+const sortOptions: { value: SortOption; label: string }[] = [
+  { value: 'createdAt', label: '发布时间' },
+  { value: 'lastCommentAt', label: '最近评论' },
+  { value: 'views', label: '阅读量' },
+]
 
 export function BlogList() {
   const [search, setSearch] = useState("")
   const [activeCategory, setActiveCategory] = useState("全部")
+  const [sortBy, setSortBy] = useState<SortOption>('createdAt')
   const [posts, setPosts] = useState<Post[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,7 +52,7 @@ export function BlogList() {
     loadData()
   }, [])
 
-  // 搜索和分类变化时重新加载文章
+  // 搜索、分类、排序变化时重新加载文章
   useEffect(() => {
     const delaySearch = setTimeout(async () => {
       try {
@@ -51,7 +63,8 @@ export function BlogList() {
           page: 1, 
           limit: 20, 
           search: search || undefined,
-          category
+          category,
+          sortBy
         })
         setPosts(result.posts)
       } catch (err) {
@@ -62,7 +75,7 @@ export function BlogList() {
     }, 300)
 
     return () => clearTimeout(delaySearch)
-  }, [search, activeCategory])
+  }, [search, activeCategory, sortBy])
 
   // 获取要显示的文章（已经过 API 筛选）
   const displayPosts = posts
@@ -141,7 +154,7 @@ export function BlogList() {
       </div>
 
       {/* 分类筛选 */}
-      <div className="flex flex-wrap gap-2 mb-10">
+      <div className="flex flex-wrap gap-2 mb-6">
         {categories.map((cat) => (
           <button
             key={cat}
@@ -155,6 +168,29 @@ export function BlogList() {
             {cat}
           </button>
         ))}
+      </div>
+
+      {/* 排序选项 */}
+      <div className="flex items-center gap-2 mb-10">
+        <ArrowUpDown className="h-4 w-4 text-muted-foreground/50" />
+        <span className="text-xs text-muted-foreground/60 mr-2">排序：</span>
+        <div className="flex gap-1">
+          {sortOptions.map((option) => (
+            <Button
+              key={option.value}
+              variant="ghost"
+              size="sm"
+              onClick={() => setSortBy(option.value)}
+              className={`h-7 px-3 text-xs font-mono transition-all duration-300 ${
+                sortBy === option.value
+                  ? "bg-primary/10 text-primary hover:bg-primary/15"
+                  : "text-muted-foreground/60 hover:text-foreground hover:bg-card/40"
+              }`}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {/* 加载指示器 */}

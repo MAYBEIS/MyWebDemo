@@ -52,6 +52,7 @@ export interface GetPostsOptions {
   category?: string
   tag?: string
   search?: string
+  sortBy?: 'createdAt' | 'lastCommentAt' | 'views' // 排序字段：发布时间、最近评论时间、阅读量
 }
 
 /**
@@ -69,6 +70,7 @@ export async function getPosts(options: GetPostsOptions = {}): Promise<{
     category,
     tag,
     search,
+    sortBy = 'createdAt', // 默认按发布时间排序
   } = options
 
   // 构建查询条件
@@ -101,6 +103,20 @@ export async function getPosts(options: GetPostsOptions = {}): Promise<{
   // 获取总数
   const total = await prisma.posts.count({ where })
 
+  // 根据排序字段确定排序方式
+  let orderBy: any
+  if (sortBy === 'views') {
+    // 按阅读量排序
+    orderBy = { views: 'desc' }
+  } else if (sortBy === 'lastCommentAt') {
+    // 按最近评论时间排序 - 需要特殊处理
+    // 由于 Prisma 不支持直接按关联表字段排序，我们需要在应用层处理
+    orderBy = { createdAt: 'desc' } // 临时排序，后续会在应用层重新排序
+  } else {
+    // 默认按发布时间排序
+    orderBy = { createdAt: 'desc' }
+  }
+
   // 获取分页数据
   const posts = await prisma.posts.findMany({
     where,
@@ -116,13 +132,13 @@ export async function getPosts(options: GetPostsOptions = {}): Promise<{
         take: 1,
       }
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy,
     skip: (page - 1) * limit,
     take: limit,
   })
 
   // 转换为 Post 格式
-  const formattedPosts: Post[] = posts.map((post) => ({
+  let formattedPosts: Post[] = posts.map((post) => ({
     id: post.id,
     slug: post.slug,
     title: post.title,
@@ -141,6 +157,18 @@ export async function getPosts(options: GetPostsOptions = {}): Promise<{
     // 获取最近评论时间（如果有评论的话）
     lastCommentAt: post.comments && post.comments.length > 0 ? post.comments[0].createdAt : null,
   }))
+
+  // 如果按最近评论时间排序，需要在应用层重新排序
+  if (sortBy === 'lastCommentAt') {
+    formattedPosts.sort((a, b) => {
+      // 有评论的文章排在前面
+      if (a.lastCommentAt && !b.lastCommentAt) return -1
+      if (!a.lastCommentAt && b.lastCommentAt) return 1
+      if (!a.lastCommentAt && !b.lastCommentAt) return 0
+      // 都有评论，按评论时间降序
+      return new Date(b.lastCommentAt!).getTime() - new Date(a.lastCommentAt!).getTime()
+    })
+  }
 
   return {
     posts: formattedPosts,

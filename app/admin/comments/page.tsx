@@ -46,7 +46,7 @@ export default async function AdminCommentsPage() {
       posts: {
         select: { id: true, title: true, slug: true }
       },
-      comments: {
+      other_comments: {
         select: { id: true }
       }
     }
@@ -70,7 +70,7 @@ export default async function AdminCommentsPage() {
       slug: comment.posts.slug,
     } : null,
     parentId: comment.parentId,
-    replyCount: comment.comments?.length || 0,
+    replyCount: comment.other_comments?.length || 0,
   }))
 
   return (
