@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Loader2, ShoppingBag, Eye, Copy, Check, QrCode, RefreshCw, X, Clock, CreditCard, Wallet, TestTube } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/lib/auth-store'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
@@ -105,18 +106,21 @@ export default function OrdersPage() {
   // 倒计时状态
   const [countdowns, setCountdowns] = useState<Record<string, string>>({})
   
-  const { isLoggedIn } = useAuth()
+  const { isLoggedIn, isLoading: authLoading } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
 
   useEffect(() => {
+    // 等待认证状态加载完成后再判断
+    if (authLoading) return
+    
     if (!isLoggedIn) {
       router.push('/login')
       return
     }
     fetchOrders()
     fetchAvailableChannels()
-  }, [isLoggedIn, router])
+  }, [isLoggedIn, authLoading, router])
 
   // 获取可用的支付渠道（使用公开API，不需要管理员权限）
   const fetchAvailableChannels = async () => {
@@ -505,10 +509,36 @@ export default function OrdersPage() {
     return new Date(dateStr).toLocaleString('zh-CN')
   }
 
-  if (loading) {
+  // 认证加载中或页面加载中时显示骨架屏
+  if (authLoading || loading) {
     return (
-      <div className="container mx-auto py-8 flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="container mx-auto py-8 pt-24 space-y-6">
+        <div>
+          <Skeleton className="h-10 w-32 mb-2" />
+          <Skeleton className="h-5 w-40" />
+        </div>
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-5 w-48" />
+                    <Skeleton className="h-4 w-40" />
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right space-y-2">
+                      <Skeleton className="h-6 w-20" />
+                      <Skeleton className="h-5 w-16" />
+                    </div>
+                    <Skeleton className="h-8 w-16" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     )
   }
