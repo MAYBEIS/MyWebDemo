@@ -293,7 +293,7 @@ export default function ShopPage() {
             router.push('/orders')
           }
         } else if (selectedPaymentMethod === 'test') {
-          // 测试支付
+          // 测试支付 - 模拟微信支付的流程
           const payResponse = await fetch('/api/shop/test-pay', {
             method: 'POST',
             headers: {
@@ -305,11 +305,11 @@ export default function ShopPage() {
           })
 
           const payData = await payResponse.json()
-          if (payData.success) {
-            toast.success('测试支付成功！')
-            router.push('/orders')
+          if (payData.success && payData.data.codeUrl) {
+            // 跳转到订单页面，显示支付二维码（模拟微信支付流程）
+            router.push(`/orders?pay=${orderId}&codeUrl=${encodeURIComponent(payData.data.codeUrl)}&testMode=true`)
           } else {
-            toast.error(payData.error || '测试支付失败')
+            toast.error(payData.error || '创建支付订单失败')
             router.push('/orders')
           }
         } else {

@@ -163,7 +163,16 @@ export default function OrdersPage() {
     const checkPayment = async () => {
       setCheckingPayment(true)
       try {
-        const response = await fetch(`/api/shop/wechat-pay?orderNo=${payingOrder.orderNo}`)
+        // 根据订单的支付方式选择不同的查询接口
+        let apiUrl = `/api/shop/wechat-pay?orderNo=${payingOrder.orderNo}`
+        
+        if (payingOrder.paymentMethod === 'test') {
+          apiUrl = `/api/shop/test-pay?orderNo=${payingOrder.orderNo}`
+        } else if (payingOrder.paymentMethod === 'xunhupay_wechat' || payingOrder.paymentMethod === 'xunhupay_alipay') {
+          apiUrl = `/api/shop/xunhupay?orderNo=${payingOrder.orderNo}`
+        }
+        
+        const response = await fetch(apiUrl)
         const data = await response.json()
         
         if (data.success && data.data.tradeState === 'SUCCESS') {
@@ -381,6 +390,7 @@ export default function OrdersPage() {
 
   // 发起测试支付
   const handleTestPay = async (order: Order) => {
+    setPayingOrder(order)
     setProcessingPayment(true)
     try {
       const response = await fetch('/api/shop/test-pay', {
@@ -392,11 +402,12 @@ export default function OrdersPage() {
       })
 
       const data = await response.json()
-      if (data.success) {
-        toast.success('测试支付成功！')
-        fetchOrders() // 刷新订单列表
+      if (data.success && data.data.codeUrl) {
+        // 显示二维码对话框（模拟微信支付流程）
+        setPayQrCodeUrl(data.data.codeUrl)
+        setPayQrDialogOpen(true)
       } else {
-        toast.error(data.error || '测试支付失败')
+        toast.error(data.error || '创建支付订单失败')
       }
     } catch (error) {
       console.error('发起测试支付失败:', error)
@@ -412,7 +423,16 @@ export default function OrdersPage() {
     
     setCheckingPayment(true)
     try {
-      const response = await fetch(`/api/shop/wechat-pay?orderNo=${payingOrder.orderNo}`)
+      // 根据订单的支付方式选择不同的查询接口
+      let apiUrl = `/api/shop/wechat-pay?orderNo=${payingOrder.orderNo}`
+      
+      if (payingOrder.paymentMethod === 'test') {
+        apiUrl = `/api/shop/test-pay?orderNo=${payingOrder.orderNo}`
+      } else if (payingOrder.paymentMethod === 'xunhupay_wechat' || payingOrder.paymentMethod === 'xunhupay_alipay') {
+        apiUrl = `/api/shop/xunhupay?orderNo=${payingOrder.orderNo}`
+      }
+      
+      const response = await fetch(apiUrl)
       const data = await response.json()
       
       if (data.success && data.data.tradeState === 'SUCCESS') {
@@ -672,6 +692,8 @@ export default function OrdersPage() {
                   <div className="text-sm text-muted-foreground">支付方式</div>
                   <div className="font-medium">
                     {selectedOrder.paymentMethod === 'wechat' ? '微信支付' : 
+                     selectedOrder.paymentMethod === 'alipay' ? '支付宝' :
+                     selectedOrder.paymentMethod === 'test' ? '测试支付' :
                      selectedOrder.paymentMethod === 'xunhupay_alipay' ? '支付宝（虎皮椒）' :
                      selectedOrder.paymentMethod === 'xunhupay_wechat' ? '微信支付（虎皮椒）' :
                      selectedOrder.paymentMethod === 'manual' ? '人工处理' :
