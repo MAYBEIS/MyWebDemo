@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -84,7 +84,7 @@ const orderStatusMap: Record<string, { label: string; variant: 'default' | 'seco
   refunded: { label: '已退款', variant: 'secondary' }
 }
 
-export default function OrdersPage() {
+function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
@@ -1037,5 +1037,43 @@ export default function OrdersPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+// 用 Suspense 包裹组件导出
+export default function OrdersPageWrapper() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto py-8 pt-24 space-y-6">
+        <div>
+          <Skeleton className="h-10 w-32 mb-2" />
+          <Skeleton className="h-5 w-40" />
+        </div>
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-5 w-48" />
+                    <Skeleton className="h-4 w-40" />
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right space-y-2">
+                      <Skeleton className="h-6 w-20" />
+                      <Skeleton className="h-5 w-16" />
+                    </div>
+                    <Skeleton className="h-8 w-16" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    }>
+      <OrdersPage />
+    </Suspense>
   )
 }

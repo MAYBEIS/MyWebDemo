@@ -27,6 +27,9 @@ export async function GET(request: NextRequest) {
         avatar: true,
         bio: true,
         isAdmin: true,
+        isBanned: true,
+        bannedReason: true,
+        bannedAt: true,
         createdAt: true,
         _count: {
           select: {

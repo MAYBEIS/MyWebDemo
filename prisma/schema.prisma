@@ -87,6 +87,9 @@ model users {
   name            String
   password        String
   isAdmin         Boolean           @default(false)
+  isBanned        Boolean           @default(false)  // 是否被封禁
+  bannedReason    String?           // 封禁原因
+  bannedAt        DateTime?         // 封禁时间
   avatar          String?
   bio             String?
   createdAt       DateTime          @default(now())
@@ -100,6 +103,8 @@ model users {
   product_keys    product_keys[]
   user_memberships user_memberships?
   user_coupons    user_coupons[]
+
+  @@index([isBanned])
 }
 
 // 用户对文章的点赞记录
