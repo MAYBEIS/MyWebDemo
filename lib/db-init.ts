@@ -28,12 +28,86 @@ export function getDatabaseType(): 'sqlite' | 'postgresql' {
 }
 
 /**
+ * 检查数据库表是否存在
+ * 用于判断是否需要执行数据库迁移
+ */
+export async function checkTablesExist(): Promise<{ 
+  users: boolean
+  posts: boolean
+  comments: boolean
+  system_settings: boolean
+  allTablesExist: boolean
+}> {
+  const prisma = getPrismaClient()
+  const dbType = getDatabaseType()
+  
+  try {
+    let usersExist = false
+    let postsExist = false
+    let commentsExist = false
+    let settingsExist = false
+    
+    if (dbType === 'postgresql') {
+      // PostgreSQL: 查询 information_schema 检查表是否存在
+      const result = await prisma.$queryRaw<Array<{ table_name: string }>>`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name IN ('users', 'posts', 'comments', 'system_settings')
+      `
+      const tableNames = result.map(r => r.table_name)
+      usersExist = tableNames.includes('users')
+      postsExist = tableNames.includes('posts')
+      commentsExist = tableNames.includes('comments')
+      settingsExist = tableNames.includes('system_settings')
+    } else {
+      // SQLite: 查询 sqlite_master 检查表是否存在
+      const result = await prisma.$queryRaw<Array<{ name: string }>>`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' 
+        AND name IN ('users', 'posts', 'comments', 'system_settings')
+      `
+      const tableNames = result.map(r => r.name)
+      usersExist = tableNames.includes('users')
+      postsExist = tableNames.includes('posts')
+      commentsExist = tableNames.includes('comments')
+      settingsExist = tableNames.includes('system_settings')
+    }
+    
+    return {
+      users: usersExist,
+      posts: postsExist,
+      comments: commentsExist,
+      system_settings: settingsExist,
+      allTablesExist: usersExist && postsExist && commentsExist && settingsExist,
+    }
+  } catch (error) {
+    console.error('Error checking tables exist:', error)
+    return {
+      users: false,
+      posts: false,
+      comments: false,
+      system_settings: false,
+      allTablesExist: false,
+    }
+  } finally {
+    await prisma.$disconnect()
+  }
+}
+
+/**
  * Check if any admin user exists
  * Used to determine if initialization is needed
  */
 export async function hasAdminUser(): Promise<boolean> {
   const prisma = getPrismaClient()
   try {
+    // 先检查表是否存在
+    const tablesExist = await checkTablesExist()
+    if (!tablesExist.users) {
+      return false
+    }
+    
     const adminCount = await prisma.users.count({
       where: { isAdmin: true }
     })
@@ -52,6 +126,12 @@ export async function hasAdminUser(): Promise<boolean> {
 export async function hasAnyUser(): Promise<boolean> {
   const prisma = getPrismaClient()
   try {
+    // 先检查表是否存在
+    const tablesExist = await checkTablesExist()
+    if (!tablesExist.users) {
+      return false
+    }
+    
     const userCount = await prisma.users.count()
     return userCount > 0
   } catch (error) {
@@ -192,6 +272,7 @@ async function createDefaultSettings(prisma: PrismaClient) {
 
 export default {
   getDatabaseType,
+  checkTablesExist,
   hasAdminUser,
   hasAnyUser,
   isDatabaseConnected,
