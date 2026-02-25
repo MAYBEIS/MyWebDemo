@@ -17,15 +17,53 @@ import type {
 } from '../types'
 
 /**
+ * 支付渠道配置字段
+ */
+export interface PaymentChannelConfigField {
+  label: string
+  type: 'text' | 'password' | 'url'
+  placeholder: string
+  required: boolean
+  key: string
+  helpText?: string
+}
+
+/**
+ * 支付渠道支持的支付方式
+ */
+export interface PaymentType {
+  code: string
+  name: string
+  icon: string
+}
+
+/**
  * 支付渠道信息
+ * 渠道定义由代码管理，包含完整的元数据信息
  */
 export interface PaymentChannel {
-  id: string
-  name: string
+  /** 渠道代码（唯一标识） */
   code: string
+  /** 渠道名称 */
+  name: string
+  /** 渠道描述 */
+  description: string
+  /** 渠道图标 */
   icon?: string
-  description?: string
-  status: boolean
+  /** 配置字段列表 */
+  configFields: PaymentChannelConfigField[]
+  /** 支持的支付方式（如虎皮椒支持微信和支付宝） */
+  supportedPaymentTypes?: PaymentType[]
+  /** 帮助文档链接 */
+  helpUrl?: string
+  /** 排序权重 */
+  sortOrder: number
+  /** 是否启用 */
+  enabled: boolean
+  /** 配置信息 */
+  config: Record<string, string>
+  /** 更新时间 */
+  updatedAt?: Date
 }
 
 /**

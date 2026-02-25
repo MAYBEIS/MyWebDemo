@@ -20,50 +20,39 @@ import {
 import { Loader2, CreditCard, Settings, AlertCircle, Eye, EyeOff, Save, HelpCircle, Globe } from 'lucide-react'
 import { toast } from 'sonner'
 
-// 支付渠道配置类型
+/**
+ * 支付渠道配置字段类型
+ * 与 lib/payment-channels.ts 中的定义保持一致
+ */
+interface PaymentChannelConfigField {
+  label: string
+  type: 'text' | 'password' | 'url'
+  placeholder: string
+  required: boolean
+  key: string
+  helpText?: string
+}
+
+/**
+ * 支付渠道类型
+ * 与 lib/payment-channels.ts 中的定义保持一致
+ */
 interface PaymentChannel {
-  id: string
-  name: string
   code: string
+  name: string
+  description: string
+  icon?: string
+  configFields: PaymentChannelConfigField[]
+  supportedPaymentTypes?: Array<{
+    code: string
+    name: string
+    icon: string
+  }>
+  helpUrl?: string
+  sortOrder: number
   enabled: boolean
-  config: Record<string, string> | string
-  description: string | null
-}
-
-// 支付渠道配置字段定义
-const channelConfigFields: Record<string, { label: string; type: string; placeholder: string; required: boolean }[]> = {
-  wechat: [
-    { label: '公众号AppID', type: 'text', placeholder: 'wx1234567890abcdef', required: true },
-    { label: '商户号', type: 'text', placeholder: '1234567890', required: true },
-    { label: 'API密钥', type: 'password', placeholder: '32位API密钥', required: true },
-    { label: 'API V3密钥', type: 'password', placeholder: '32位API V3密钥（可选）', required: false },
-    { label: '证书序列号', type: 'text', placeholder: '证书序列号（可选）', required: false },
-    { label: '回调通知地址', type: 'text', placeholder: 'https://your-domain.com/api/shop/wechat-pay/notify', required: true },
-  ],
-  alipay: [
-    { label: '应用ID', type: 'text', placeholder: '2021000000000000', required: true },
-    { label: '应用私钥', type: 'password', placeholder: '应用私钥内容', required: true },
-    { label: '支付宝公钥', type: 'password', placeholder: '支付宝公钥内容', required: true },
-    { label: '回调通知地址', type: 'text', placeholder: 'https://your-domain.com/api/shop/alipay/notify', required: true },
-  ],
-  xunhupay: [
-    { label: 'AppID', type: 'text', placeholder: '虎皮椒AppID', required: true },
-    { label: 'AppSecret', type: 'password', placeholder: '虎皮椒密钥', required: true },
-    { label: '异步通知地址', type: 'text', placeholder: 'https://your-domain.com/api/shop/xunhupay/notify', required: false },
-  ]
-}
-
-// 虎皮椒支持的支付方式
-const XUNHUPAY_PAYMENT_TYPES = [
-  { code: 'wechat', name: '微信支付', icon: '💚' },
-  { code: 'alipay', name: '支付宝', icon: '💳' },
-]
-
-// 支付渠道名称映射
-const channelNames: Record<string, string> = {
-  wechat: '微信支付',
-  alipay: '支付宝',
-  xunhupay: '虎皮椒支付'
+  config: Record<string, string>
+  updatedAt?: Date
 }
 
 interface PaymentChannelManagerProps {
@@ -100,7 +89,7 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
       const response = await fetch('/api/shop/payment-channels')
       const data = await response.json()
       if (data.success) {
-        setChannels(data.data)
+        setChannels(data.data || [])
       }
     } catch (error) {
       console.error('获取支付渠道失败:', error)
@@ -139,25 +128,25 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
   const handleOpenConfig = (channel: PaymentChannel) => {
     setSelectedChannel(channel)
     // 解析config，可能是字符串或对象
-    const configObj = typeof channel.config === 'string' 
-      ? JSON.parse(channel.config) 
+    const configObj = typeof channel.config === 'string'
+      ? JSON.parse(channel.config)
       : channel.config
     setEditedConfig({ ...configObj })
-    
+
     // 检查是否使用当前域名
     const notifyUrl = configObj.notifyUrl || ''
     const expectedNotifyUrl = `${currentDomain}/api/shop/${channel.code}/notify`
     setUseCurrentDomain(notifyUrl === expectedNotifyUrl || notifyUrl === '')
-    
+
     // 加载虎皮椒特有配置
-    if (channel.code === 'xunhupay') {
+    if (channel.code === 'xunhupay' && channel.supportedPaymentTypes) {
       // 加载启用的支付方式
-      const enabledTypes = configObj.enabledPaymentTypes 
+      const enabledTypes = configObj.enabledPaymentTypes
         ? configObj.enabledPaymentTypes.split(',').filter((t: string) => t)
-        : ['wechat', 'alipay']
+        : channel.supportedPaymentTypes.map(t => t.code)
       setXunhupayPaymentTypes(enabledTypes)
     }
-    
+
     setConfigDialogOpen(true)
   }
 
@@ -169,7 +158,7 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
     try {
       // 构建最终配置
       const finalConfig = { ...editedConfig }
-      
+
       // 如果是虎皮椒，添加特有配置
       if (selectedChannel.code === 'xunhupay') {
         finalConfig.enabledPaymentTypes = xunhupayPaymentTypes.join(',')
@@ -217,10 +206,10 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
   }
 
   // 切换显示/隐藏密钥
-  const toggleShowSecret = (fieldLabel: string) => {
+  const toggleShowSecret = (fieldKey: string) => {
     setShowSecret(prev => ({
       ...prev,
-      [fieldLabel]: !prev[fieldLabel]
+      [fieldKey]: !prev[fieldKey]
     }))
   }
 
@@ -229,51 +218,42 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
     setUseCurrentDomain(checked)
     if (checked && selectedChannel && currentDomain) {
       // 自动填充当前域名的回调地址
-      const notifyUrl = `${currentDomain}/api/shop/${selectedChannel.code}/notify`
-      setConfigValue('异步通知地址', notifyUrl)
-      setConfigValue('回调通知地址', notifyUrl)
+      setEditedConfig(prev => ({
+        ...prev,
+        notifyUrl: `${currentDomain}/api/shop/${selectedChannel.code}/notify`
+      }))
     }
   }
 
-  // 将中文标签映射到配置键
-  const configKeyMap: Record<string, string> = {
-    '公众号AppID': 'appId',
-    '商户号': 'mchId',
-    'API密钥': 'apiKey',
-    'API V3密钥': 'apiV3Key',
-    '证书序列号': 'serialNo',
-    '回调通知地址': 'notifyUrl',
-    '应用ID': 'appId',
-    '应用私钥': 'privateKey',
-    '支付宝公钥': 'alipayPublicKey',
-    'AppID': 'appid',
-    'AppSecret': 'appSecret',
-    '异步通知地址': 'notifyUrl',
-  }
-
-  // 获取配置字段值
-  const getConfigValue = (channel: PaymentChannel, fieldLabel: string): string => {
-    const key = configKeyMap[fieldLabel] || fieldLabel
-    // 解析config，可能是字符串或对象
-    const configObj = typeof channel.config === 'string' 
-      ? JSON.parse(channel.config) 
-      : channel.config
-    return configObj[key] || ''
+  // 获取编辑后的配置值（用于Input显示）
+  const getEditedConfigValue = (key: string): string => {
+    return editedConfig[key] ?? ''
   }
 
   // 设置配置字段值
-  const setConfigValue = (fieldLabel: string, value: string) => {
-    const key = configKeyMap[fieldLabel] || fieldLabel
+  const setConfigValue = (key: string, value: string) => {
     setEditedConfig(prev => ({
       ...prev,
       [key]: value
     }))
   }
 
-  // 获取编辑后的配置值（用于Input显示）
-  const getEditedConfigValue = (fieldLabel: string): string => {
-    const key = configKeyMap[fieldLabel] || fieldLabel
-    return editedConfig[key] ?? ''
+  // 获取配置字段值（从渠道对象）
+  const getConfigValue = (channel: PaymentChannel, key: string): string => {
+    const configObj = typeof channel.config === 'string'
+      ? JSON.parse(channel.config)
+      : channel.config
+    return configObj[key] || ''
+  }
+
+  // 检查必填配置是否完整
+  const hasRequiredConfig = (channel: PaymentChannel): boolean => {
+    if (!channel.configFields || !Array.isArray(channel.configFields)) {
+      return false
+    }
+    return channel.configFields
+      .filter(f => f.required)
+      .every(f => getConfigValue(channel, f.key))
   }
 
   if (loading) {
@@ -298,7 +278,7 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
             配置和管理支付渠道，支持微信支付、支付宝、虎皮椒支付等
           </CardDescription>
         </CardHeader>
-        
+
         <CardContent>
           {channels.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -307,14 +287,11 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
           ) : (
             <div className="space-y-4">
               {channels.map((channel) => {
-                const configFields = channelConfigFields[channel.code] || []
-                const hasRequiredConfig = configFields
-                  .filter(f => f.required)
-                  .every(f => getConfigValue(channel, f.label))
+                const configComplete = hasRequiredConfig(channel)
 
                 return (
                   <div
-                    key={channel.id}
+                    key={channel.code}
                     className="flex items-center justify-between p-4 rounded-lg border border-border/40 bg-card/30"
                   >
                     <div className="flex items-center gap-4">
@@ -323,20 +300,23 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{channelNames[channel.code] || channel.name}</span>
+                          <span className="font-medium">
+                            {channel.icon && <span className="mr-1">{channel.icon}</span>}
+                            {channel.name}
+                          </span>
                           {channel.enabled ? (
                             <Badge variant="default" className="text-xs">已启用</Badge>
                           ) : (
                             <Badge variant="secondary" className="text-xs">已禁用</Badge>
                           )}
-                          {!hasRequiredConfig && channel.enabled && (
+                          {!configComplete && channel.enabled && (
                             <Badge variant="destructive" className="text-xs">配置不完整</Badge>
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground">{channel.description}</p>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-3">
                       <Button
                         variant="outline"
@@ -381,14 +361,19 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
         <DialogContent className={selectedChannel?.code === 'xunhupay' ? 'max-w-2xl' : 'max-w-lg'}>
           <DialogHeader>
             <DialogTitle>
-              配置 {selectedChannel && (channelNames[selectedChannel.code] || selectedChannel.name)}
+              配置 {selectedChannel && (
+                <>
+                  {selectedChannel.icon && <span className="mr-1">{selectedChannel.icon}</span>}
+                  {selectedChannel.name}
+                </>
+              )}
             </DialogTitle>
             <DialogDescription>
               请填写支付渠道的配置信息
             </DialogDescription>
           </DialogHeader>
 
-          {selectedChannel?.code === 'xunhupay' ? (
+          {selectedChannel?.code === 'xunhupay' && selectedChannel.supportedPaymentTypes ? (
             // 虎皮椒专用配置页面
             <div className="space-y-6 py-4">
               <Tabs defaultValue="basic" className="w-full">
@@ -397,7 +382,7 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                   <TabsTrigger value="payment">支付方式</TabsTrigger>
                   <TabsTrigger value="help">帮助说明</TabsTrigger>
                 </TabsList>
-                
+
                 {/* 基本配置 */}
                 <TabsContent value="basic" className="space-y-4 mt-4">
                   {/* 使用当前域名开关 */}
@@ -416,11 +401,11 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                       onCheckedChange={handleToggleUseCurrentDomain}
                     />
                   </div>
-                  
-                  {(channelConfigFields.xunhupay || []).map((field) => (
-                    <div key={field.label} className="grid gap-2">
+
+                  {(selectedChannel.configFields || []).map((field) => (
+                    <div key={field.key} className="grid gap-2">
                       <div className="flex items-center justify-between">
-                        <Label htmlFor={field.label}>
+                        <Label htmlFor={field.key}>
                           {field.label}
                           {field.required && <span className="text-destructive ml-1">*</span>}
                         </Label>
@@ -429,9 +414,9 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                             variant="ghost"
                             size="sm"
                             className="h-6 px-2"
-                            onClick={() => toggleShowSecret(field.label)}
+                            onClick={() => toggleShowSecret(field.key)}
                           >
-                            {showSecret[field.label] ? (
+                            {showSecret[field.key] ? (
                               <EyeOff className="h-3.5 w-3.5" />
                             ) : (
                               <Eye className="h-3.5 w-3.5" />
@@ -440,17 +425,20 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                         )}
                       </div>
                       <Input
-                        id={field.label}
-                        type={field.type === 'password' && !showSecret[field.label] ? 'password' : 'text'}
-                        value={getEditedConfigValue(field.label)}
-                        onChange={(e) => setConfigValue(field.label, e.target.value)}
+                        id={field.key}
+                        type={field.type === 'password' && !showSecret[field.key] ? 'password' : 'text'}
+                        value={getEditedConfigValue(field.key)}
+                        onChange={(e) => setConfigValue(field.key, e.target.value)}
                         placeholder={field.placeholder}
                         className="bg-background/30"
                       />
+                      {field.helpText && (
+                        <p className="text-xs text-muted-foreground">{field.helpText}</p>
+                      )}
                     </div>
                   ))}
                 </TabsContent>
-                
+
                 {/* 支付方式配置 */}
                 <TabsContent value="payment" className="space-y-4 mt-4">
                   <div className="space-y-4">
@@ -460,15 +448,15 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                         选择用户在结账时可使用的支付方式
                       </p>
                     </div>
-                    
+
                     <div className="grid grid-cols-2 gap-3">
-                      {XUNHUPAY_PAYMENT_TYPES.map((type) => (
+                      {selectedChannel.supportedPaymentTypes.map((type) => (
                         <div
                           key={type.code}
                           className={`
                             flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors
-                            ${xunhupayPaymentTypes.includes(type.code) 
-                              ? 'border-primary bg-primary/10' 
+                            ${xunhupayPaymentTypes.includes(type.code)
+                              ? 'border-primary bg-primary/10'
                               : 'border-border hover:border-primary/50'}
                           `}
                           onClick={() => toggleXunhupayPaymentType(type.code)}
@@ -484,7 +472,7 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                     </div>
                   </div>
                 </TabsContent>
-                
+
                 {/* 帮助说明 */}
                 <TabsContent value="help" className="space-y-4 mt-4">
                   <div className="space-y-4">
@@ -498,7 +486,7 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                         相比官方支付接口，虎皮椒对个人开发者更友好，无需企业资质即可接入。
                       </p>
                     </div>
-                    
+
                     <div className="p-4 rounded-lg bg-muted/50">
                       <h4 className="font-medium mb-2">如何获取配置信息？</h4>
                       <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
@@ -508,7 +496,7 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                         <li>配置异步通知地址，格式为：您的域名/api/shop/xunhupay/notify</li>
                       </ol>
                     </div>
-                    
+
                     <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
                       <h4 className="font-medium text-yellow-600 dark:text-yellow-400 mb-2">⚠️ 注意事项</h4>
                       <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
@@ -518,11 +506,11 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                         <li>请选择信誉良好的支付平台，避免资金风险</li>
                       </ul>
                     </div>
-                    
+
                     <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
                       <h4 className="font-medium text-blue-600 dark:text-blue-400 mb-2">💡 测试模式</h4>
                       <p className="text-sm text-muted-foreground">
-                        在环境变量中设置 <code className="px-1 py-0.5 rounded bg-muted">PAYMENT_TEST_MODE=true</code> 
+                        在环境变量中设置 <code className="px-1 py-0.5 rounded bg-muted">PAYMENT_TEST_MODE=true</code>
                         可以启用测试模式，无需真实支付即可测试支付流程。
                       </p>
                     </div>
@@ -550,11 +538,11 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                     onCheckedChange={handleToggleUseCurrentDomain}
                   />
                 </div>
-                
-                {(channelConfigFields[selectedChannel.code] || []).map((field) => (
-                  <div key={field.label} className="grid gap-2">
+
+                {(selectedChannel.configFields || []).map((field) => (
+                  <div key={field.key} className="grid gap-2">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor={field.label}>
+                      <Label htmlFor={field.key}>
                         {field.label}
                         {field.required && <span className="text-destructive ml-1">*</span>}
                       </Label>
@@ -563,9 +551,9 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                           variant="ghost"
                           size="sm"
                           className="h-6 px-2"
-                          onClick={() => toggleShowSecret(field.label)}
+                          onClick={() => toggleShowSecret(field.key)}
                         >
-                          {showSecret[field.label] ? (
+                          {showSecret[field.key] ? (
                             <EyeOff className="h-3.5 w-3.5" />
                           ) : (
                             <Eye className="h-3.5 w-3.5" />
@@ -574,13 +562,16 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
                       )}
                     </div>
                     <Input
-                      id={field.label}
-                      type={field.type === 'password' && !showSecret[field.label] ? 'password' : 'text'}
-                      value={getEditedConfigValue(field.label) || getConfigValue(selectedChannel, field.label)}
-                      onChange={(e) => setConfigValue(field.label, e.target.value)}
+                      id={field.key}
+                      type={field.type === 'password' && !showSecret[field.key] ? 'password' : 'text'}
+                      value={getEditedConfigValue(field.key) || getConfigValue(selectedChannel, field.key)}
+                      onChange={(e) => setConfigValue(field.key, e.target.value)}
                       placeholder={field.placeholder}
                       className="bg-background/30"
                     />
+                    {field.helpText && (
+                      <p className="text-xs text-muted-foreground">{field.helpText}</p>
+                    )}
                   </div>
                 ))}
               </div>
