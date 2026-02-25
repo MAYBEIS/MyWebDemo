@@ -4,6 +4,7 @@ import { SiteFooter } from "@/components/site-footer"
 import { AdminSidebar } from "@/components/admin-sidebar"
 import { cookies } from "next/headers"
 import { verifyToken } from "@/lib/auth-service"
+import { DashboardContent } from "@/components/dashboard-content"
 
 export const metadata = {
   title: "管理后台 | SysLog",
@@ -21,6 +22,35 @@ async function getCurrentUser() {
   return verifyToken(token)
 }
 
+// 获取仪表盘统计数据
+async function getDashboardStats() {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("auth_token")?.value
+    
+    if (!token) {
+      return null
+    }
+
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/admin/dashboard/stats`, {
+      headers: {
+        Cookie: `auth_token=${token}`,
+      },
+      cache: 'no-store',
+    })
+
+    if (!response.ok) {
+      return null
+    }
+
+    const data = await response.json()
+    return data.success ? data.data : null
+  } catch (error) {
+    console.error('获取仪表盘数据失败:', error)
+    return null
+  }
+}
+
 export default async function AdminPage() {
   const user = await getCurrentUser()
   
@@ -33,6 +63,9 @@ export default async function AdminPage() {
   if (!user.isAdmin) {
     redirect("/")
   }
+
+  // 获取仪表盘数据
+  const stats = await getDashboardStats()
   
   return (
     <main className="min-h-screen bg-background noise-bg">
@@ -41,26 +74,12 @@ export default async function AdminPage() {
         <AdminSidebar />
         <div className="flex-1 ml-8">
           <div className="rounded-xl border border-border/40 bg-card/30 p-8">
-            <h1 className="text-2xl font-bold text-foreground mb-6">管理后台</h1>
-            <p className="text-muted-foreground/60">
+            <h1 className="text-2xl font-bold text-foreground mb-2">管理后台</h1>
+            <p className="text-muted-foreground/60 mb-6">
               欢迎回来，{user.name}！这里是系统管理后台，你可以在这里管理文章、用户和评论。
             </p>
             
-            {/* 快捷统计 */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-              <div className="rounded-lg border border-border/40 bg-card/50 p-4">
-                <p className="text-sm text-muted-foreground/60">文章总数</p>
-                <p className="text-2xl font-bold text-foreground mt-1">12</p>
-              </div>
-              <div className="rounded-lg border border-border/40 bg-card/50 p-4">
-                <p className="text-sm text-muted-foreground/60">用户总数</p>
-                <p className="text-2xl font-bold text-foreground mt-1">156</p>
-              </div>
-              <div className="rounded-lg border border-border/40 bg-card/50 p-4">
-                <p className="text-sm text-muted-foreground/60">评论总数</p>
-                <p className="text-2xl font-bold text-foreground mt-1">423</p>
-              </div>
-            </div>
+            <DashboardContent initialData={stats} />
           </div>
         </div>
       </div>
