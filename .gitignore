@@ -14,10 +14,11 @@ node_modules/
 .env.production
 
 # Database files
-*.db
+# 开发状态
+# *.db
 *.db-journal
-prisma/dev.db
-prisma/*.db
+# prisma/dev.db
+# prisma/*.db
 
 # IDE
 .idea/
