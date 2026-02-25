@@ -89,21 +89,19 @@ export default function ShopPage() {
     fetchAvailableChannels()
   }, [])
 
-  // 获取可用的支付渠道
+  // 获取可用的支付渠道（使用公开API，不需要管理员权限）
   const fetchAvailableChannels = async () => {
     try {
-      const response = await fetch('/api/shop/payment-channels')
+      const response = await fetch('/api/shop/payment-channels/public')
       const data = await response.json()
       if (data.success) {
-        const channels = data.data
-          .filter((ch: any) => ch.enabled)
-          .map((ch: any) => ({
-            code: ch.code,
-            name: ch.name,
-            icon: ch.icon,
-            config: typeof ch.config === 'string' ? JSON.parse(ch.config) : ch.config,
-            supportedPaymentTypes: ch.supportedPaymentTypes
-          }))
+        const channels = data.data.map((ch: any) => ({
+          code: ch.code,
+          name: ch.name,
+          icon: ch.icon,
+          config: typeof ch.config === 'string' ? JSON.parse(ch.config) : ch.config,
+          supportedPaymentTypes: ch.supportedPaymentTypes
+        }))
         setAvailableChannels(channels)
         // 默认选择第一个可用渠道
         if (channels.length > 0) {

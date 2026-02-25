@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, ShoppingBag, Eye, Copy, Check, QrCode, RefreshCw, X, Clock, CreditCard, Wallet } from 'lucide-react'
+import { Loader2, ShoppingBag, Eye, Copy, Check, QrCode, RefreshCw, X, Clock, CreditCard, Wallet, TestTube } from 'lucide-react'
 import { useAuth } from '@/lib/auth-store'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
@@ -99,7 +99,7 @@ export default function OrdersPage() {
   // 支付方式选择状态
   const [paymentMethodDialogOpen, setPaymentMethodDialogOpen] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('')
-  const [availableChannels, setAvailableChannels] = useState<{code: string, name: string, config?: Record<string, string>}[]>([])
+  const [availableChannels, setAvailableChannels] = useState<{code: string, name: string, icon?: string, config?: Record<string, string>, supportedPaymentTypes?: Array<{code: string, name: string, icon: string}>}[]>([])
   const [processingPayment, setProcessingPayment] = useState(false)
   
   // 倒计时状态
@@ -118,19 +118,19 @@ export default function OrdersPage() {
     fetchAvailableChannels()
   }, [isLoggedIn, router])
 
-  // 获取可用的支付渠道
+  // 获取可用的支付渠道（使用公开API，不需要管理员权限）
   const fetchAvailableChannels = async () => {
     try {
-      const response = await fetch('/api/shop/payment-channels')
+      const response = await fetch('/api/shop/payment-channels/public')
       const data = await response.json()
       if (data.success) {
-        const channels = data.data
-          .filter((ch: any) => ch.enabled)
-          .map((ch: any) => ({
-            code: ch.code,
-            name: ch.name,
-            config: typeof ch.config === 'string' ? JSON.parse(ch.config) : ch.config
-          }))
+        const channels = data.data.map((ch: any) => ({
+          code: ch.code,
+          name: ch.name,
+          icon: ch.icon,
+          config: typeof ch.config === 'string' ? JSON.parse(ch.config) : ch.config,
+          supportedPaymentTypes: ch.supportedPaymentTypes
+        }))
         setAvailableChannels(channels)
       }
     } catch (error) {
@@ -274,7 +274,13 @@ export default function OrdersPage() {
     setPayingOrder(order)
     // 默认选择第一个可用渠道
     if (availableChannels.length > 0) {
-      setSelectedPaymentMethod(availableChannels[0].code)
+      const firstChannel = availableChannels[0]
+      // 如果渠道支持多种支付方式，默认选择第一种
+      if (firstChannel.supportedPaymentTypes && firstChannel.supportedPaymentTypes.length > 0) {
+        setSelectedPaymentMethod(`${firstChannel.code}_${firstChannel.supportedPaymentTypes[0].code}`)
+      } else {
+        setSelectedPaymentMethod(firstChannel.code)
+      }
     }
     setPaymentMethodDialogOpen(true)
   }
@@ -326,6 +332,12 @@ export default function OrdersPage() {
     // 根据选择的支付方式调用不同的支付接口
     if (selectedPaymentMethod === 'wechat') {
       await handleWechatPay(payingOrder)
+    } else if (selectedPaymentMethod === 'alipay') {
+      // 支付宝支付
+      await handleAlipay(payingOrder)
+    } else if (selectedPaymentMethod === 'test') {
+      // 测试支付
+      await handleTestPay(payingOrder)
     } else if (selectedPaymentMethod === 'xunhupay_alipay') {
       await handleXunhupay(payingOrder, 'alipay')
     } else if (selectedPaymentMethod === 'xunhupay_wechat') {
@@ -333,6 +345,64 @@ export default function OrdersPage() {
     } else if (selectedPaymentMethod === 'xunhupay') {
       // 如果选择的是虎皮椒支付，默认使用支付宝
       await handleXunhupay(payingOrder, 'alipay')
+    }
+  }
+
+  // 发起支付宝支付
+  const handleAlipay = async (order: Order) => {
+    setProcessingPayment(true)
+    try {
+      const response = await fetch('/api/shop/alipay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id
+        })
+      })
+
+      const data = await response.json()
+      if (data.success && data.data.payUrl) {
+        // 跳转到支付宝支付页面
+        window.open(data.data.payUrl, '_blank')
+        toast.success('已打开支付页面，请完成支付')
+        // 开始轮询检查支付状态
+        setPayQrCodeUrl(null)
+        setPayQrDialogOpen(true)
+      } else {
+        toast.error(data.error || '创建支付订单失败')
+      }
+    } catch (error) {
+      console.error('发起支付宝支付失败:', error)
+      toast.error('发起支付失败')
+    } finally {
+      setProcessingPayment(false)
+    }
+  }
+
+  // 发起测试支付
+  const handleTestPay = async (order: Order) => {
+    setProcessingPayment(true)
+    try {
+      const response = await fetch('/api/shop/test-pay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        toast.success('测试支付成功！')
+        fetchOrders() // 刷新订单列表
+      } else {
+        toast.error(data.error || '测试支付失败')
+      }
+    } catch (error) {
+      console.error('发起测试支付失败:', error)
+      toast.error('发起支付失败')
+    } finally {
+      setProcessingPayment(false)
     }
   }
 
@@ -804,83 +874,98 @@ export default function OrdersPage() {
 
             {/* 支付方式列表 */}
             <div className="space-y-2">
-              {availableChannels.map((channel) => {
-                // 根据渠道类型显示不同的选项
-                if (channel.code === 'wechat') {
-                  return (
-                    <div
-                      key={channel.code}
-                      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                        selectedPaymentMethod === channel.code 
-                          ? 'border-primary bg-primary/5' 
-                          : 'hover:bg-muted/50'
-                      }`}
-                      onClick={() => setSelectedPaymentMethod(channel.code)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-green-500/10">
-                          <QrCode className="h-5 w-5 text-green-500" />
-                        </div>
-                        <div>
-                          <div className="font-medium">微信支付</div>
-                          <div className="text-xs text-muted-foreground">使用微信扫码支付</div>
+              {availableChannels.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  暂无可用的支付方式
+                </div>
+              ) : (
+                availableChannels.map((channel) => {
+                  // 如果渠道支持多种支付方式（如虎皮椒）
+                  if (channel.supportedPaymentTypes && channel.supportedPaymentTypes.length > 0) {
+                    // 根据配置确定启用的支付类型
+                    const enabledTypes = channel.config?.enabledPaymentTypes 
+                      ? channel.config.enabledPaymentTypes.split(',').filter((t: string) => t)
+                      : channel.supportedPaymentTypes.map(t => t.code)
+                    
+                    return (
+                      <div key={channel.code} className="space-y-2">
+                        {channel.supportedPaymentTypes
+                          .filter(payType => enabledTypes.includes(payType.code))
+                          .map((payType) => {
+                            const methodCode = `${channel.code}_${payType.code}`
+                            const IconComponent = payType.code === 'wechat' ? QrCode : Wallet
+                            const colorClass = payType.code === 'wechat' ? 'bg-green-500/10 text-green-500' : 'bg-blue-500/10 text-blue-500'
+                            
+                            return (
+                              <div
+                                key={methodCode}
+                                className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                                  selectedPaymentMethod === methodCode 
+                                    ? 'border-primary bg-primary/5' 
+                                    : 'hover:bg-muted/50'
+                                }`}
+                                onClick={() => setSelectedPaymentMethod(methodCode)}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-lg ${colorClass}`}>
+                                    <IconComponent className="h-5 w-5" />
+                                  </div>
+                                  <div>
+                                    <div className="font-medium">{payType.name}（{channel.name}）</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {payType.code === 'wechat' ? '使用微信扫码支付' : '使用支付宝扫码支付'}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                      </div>
+                    )
+                  } else {
+                    // 单一支付方式的渠道
+                    let IconComponent = CreditCard
+                    let colorClass = 'bg-muted'
+                    let description = ''
+                    
+                    if (channel.code === 'wechat') {
+                      IconComponent = QrCode
+                      colorClass = 'bg-green-500/10 text-green-500'
+                      description = '使用微信扫码支付'
+                    } else if (channel.code === 'alipay') {
+                      IconComponent = Wallet
+                      colorClass = 'bg-blue-500/10 text-blue-500'
+                      description = '使用支付宝扫码支付'
+                    } else if (channel.code === 'test') {
+                      IconComponent = TestTube
+                      colorClass = 'bg-purple-500/10 text-purple-500'
+                      description = '模拟支付，用于测试'
+                    }
+                    
+                    return (
+                      <div
+                        key={channel.code}
+                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                          selectedPaymentMethod === channel.code 
+                            ? 'border-primary bg-primary/5' 
+                            : 'hover:bg-muted/50'
+                        }`}
+                        onClick={() => setSelectedPaymentMethod(channel.code)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg ${colorClass}`}>
+                            <IconComponent className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <div className="font-medium">{channel.name}</div>
+                            <div className="text-xs text-muted-foreground">{description}</div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )
-                } else if (channel.code === 'xunhupay') {
-                  // 虎皮椒支付根据配置显示启用的支付方式
-                  const enabledTypes = channel.config?.enabledPaymentTypes 
-                    ? channel.config.enabledPaymentTypes.split(',').filter((t: string) => t)
-                    : ['wechat', 'alipay'] // 默认显示微信和支付宝
-                  
-                  return (
-                    <div key={channel.code} className="space-y-2">
-                      {enabledTypes.includes('wechat') && (
-                        <div
-                          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                            selectedPaymentMethod === 'xunhupay_wechat' 
-                              ? 'border-primary bg-primary/5' 
-                              : 'hover:bg-muted/50'
-                          }`}
-                          onClick={() => setSelectedPaymentMethod('xunhupay_wechat')}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-green-500/10">
-                              <QrCode className="h-5 w-5 text-green-500" />
-                            </div>
-                            <div>
-                              <div className="font-medium">微信支付（虎皮椒）</div>
-                              <div className="text-xs text-muted-foreground">使用微信扫码支付</div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {enabledTypes.includes('alipay') && (
-                        <div
-                          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                            selectedPaymentMethod === 'xunhupay_alipay' 
-                              ? 'border-primary bg-primary/5' 
-                              : 'hover:bg-muted/50'
-                          }`}
-                          onClick={() => setSelectedPaymentMethod('xunhupay_alipay')}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-blue-500/10">
-                              <Wallet className="h-5 w-5 text-blue-500" />
-                            </div>
-                            <div>
-                              <div className="font-medium">支付宝（虎皮椒）</div>
-                              <div className="text-xs text-muted-foreground">使用支付宝扫码支付</div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                }
-                return null
-              })}
+                    )
+                  }
+                })
+              )}
             </div>
 
             {/* 确认按钮 */}
