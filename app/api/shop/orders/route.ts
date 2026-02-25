@@ -178,16 +178,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 检查待支付订单数量（最多3个）
+    // 检查待支付订单数量（最多1个）
     const pendingOrdersCount = await prisma.orders.count({
       where: {
         userId: user.id,
         status: 'pending'
       }
     })
-    if (pendingOrdersCount >= 3) {
+    if (pendingOrdersCount >= 1) {
       return NextResponse.json(
-        { success: false, error: '您有太多未支付的订单，请先完成支付或取消订单' },
+        { success: false, error: '您有未支付的订单，请先完成支付或取消订单' },
         { status: 400 }
       )
     }

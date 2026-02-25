@@ -31,9 +31,7 @@ export default function BlogPage() {
             
             {/* 侧边栏 */}
             <div className="lg:w-72 flex-shrink-0">
-              <div className="lg:sticky lg:top-28">
-                <RecentComments />
-              </div>
+              <RecentComments />
             </div>
           </div>
         </div>

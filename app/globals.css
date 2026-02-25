@@ -126,6 +126,27 @@
     @apply bg-background text-foreground;
   }
 
+  /* 防止 Radix UI 对话框/下拉菜单打开时的布局抖动 */
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  /* 覆盖 Radix UI 的 padding 补偿，防止抖动 - 多种选择器覆盖不同版本 */
+  body[data-scroll-locked],
+  body[data-radix-scroll-locked],
+  html[data-scroll-locked],
+  html[data-radix-scroll-locked] {
+    overflow: hidden !important;
+    padding-right: 0 !important;
+  }
+  
+  /* 防止任何由于滚动锁定导致的布局偏移 */
+  html.scroll-locked,
+  body.scroll-locked {
+    overflow: hidden !important;
+    padding-right: 0 !important;
+  }
+
   /* Custom scrollbar - 浅色主题 */
   ::-webkit-scrollbar {
     width: 6px;

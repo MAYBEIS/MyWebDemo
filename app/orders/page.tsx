@@ -23,6 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/lib/auth-store'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
+import { QRCodeDisplay } from '@/components/qr-code'
 
 // 订单超时时间（30分钟）
 const ORDER_TIMEOUT_MS = 30 * 60 * 1000
@@ -846,12 +847,8 @@ function OrdersPage() {
             {/* 二维码显示区域 */}
             <div className="bg-white p-4 rounded-lg border mb-4">
               {payQrCodeUrl ? (
-                // 使用第三方二维码生成服务
-                <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payQrCodeUrl)}`}
-                  alt="支付二维码"
-                  className="w-[200px] h-[200px]"
-                />
+                // 使用本地二维码生成组件
+                <QRCodeDisplay value={payQrCodeUrl} size={200} />
               ) : (
                 <div className="w-[200px] h-[200px] flex items-center justify-center bg-muted">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
