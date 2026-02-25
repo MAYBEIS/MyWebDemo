@@ -1,6 +1,7 @@
 /**
  * Database initialization utilities
  * Used to check if database needs initialization and create first admin account
+ * Supports both SQLite and PostgreSQL
  */
 
 import { PrismaClient } from '@prisma/client'
@@ -13,6 +14,17 @@ function getPrismaClient() {
       ? ['query', 'error', 'warn'] 
       : ['error'],
   })
+}
+
+/**
+ * Detect database type from DATABASE_URL
+ */
+export function getDatabaseType(): 'sqlite' | 'postgresql' {
+  const url = process.env.DATABASE_URL || ''
+  if (url.startsWith('file:') || url.includes('.db')) {
+    return 'sqlite'
+  }
+  return 'postgresql'
 }
 
 /**
@@ -51,10 +63,19 @@ export async function hasAnyUser(): Promise<boolean> {
 }
 
 /**
- * Check if Vercel Postgres mode is enabled
+ * Check if database is connected and accessible
  */
-export function isVercelPostgresEnabled(): boolean {
-  return process.env.VERCEL_POSTGRES_ENABLED === 'true'
+export async function isDatabaseConnected(): Promise<boolean> {
+  const prisma = getPrismaClient()
+  try {
+    await prisma.$queryRaw`SELECT 1`
+    return true
+  } catch (error) {
+    console.error('Database connection error:', error)
+    return false
+  } finally {
+    await prisma.$disconnect()
+  }
 }
 
 /**
@@ -170,9 +191,10 @@ async function createDefaultSettings(prisma: PrismaClient) {
 }
 
 export default {
+  getDatabaseType,
   hasAdminUser,
   hasAnyUser,
-  isVercelPostgresEnabled,
+  isDatabaseConnected,
   getDefaultAdminConfig,
   createFirstAdmin,
 }

@@ -17,6 +17,8 @@ import { login, register, useAuth } from "@/lib/auth-store"
 interface SetupStatus {
   needsSetup: boolean
   hasUsers: boolean
+  dbConnected: boolean
+  dbType: 'sqlite' | 'postgresql'
   defaultEmail?: string
   defaultName?: string
   hasDefaultPassword: boolean
@@ -27,11 +29,13 @@ function SetupWizard({
   defaultEmail, 
   defaultName, 
   hasDefaultPassword,
+  dbType,
   onComplete 
 }: { 
   defaultEmail?: string
   defaultName?: string
   hasDefaultPassword: boolean
+  dbType: 'sqlite' | 'postgresql'
   onComplete: () => void 
 }) {
   const [email, setEmail] = useState(defaultEmail || "")
@@ -129,6 +133,10 @@ function SetupWizard({
             <AlertTitle className="text-amber-700 dark:text-amber-400">首次部署</AlertTitle>
             <AlertDescription className="text-amber-600 dark:text-amber-300 text-sm">
               这是系统的第一个账号，将自动获得管理员权限
+              <br />
+              <span className="text-xs opacity-75">
+                数据库类型: {dbType === 'sqlite' ? 'SQLite (开发模式)' : 'PostgreSQL (生产模式)'}
+              </span>
             </AlertDescription>
           </Alert>
 
@@ -416,6 +424,7 @@ function AuthFormInner() {
         defaultEmail={setupStatus.defaultEmail}
         defaultName={setupStatus.defaultName}
         hasDefaultPassword={setupStatus.hasDefaultPassword}
+        dbType={setupStatus.dbType}
         onComplete={handleSetupComplete}
       />
     )

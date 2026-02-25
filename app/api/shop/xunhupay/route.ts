@@ -9,30 +9,23 @@ import {
   formatMoney
 } from '@/lib/xunhupay'
 
-// 测试模式配置
-const TEST_MODE = process.env.PAYMENT_TEST_MODE === 'true'
-const TEST_AUTO_SUCCESS_MS = parseInt(process.env.PAYMENT_TEST_AUTO_SUCCESS_MS || '5000', 10)
-
-// 存储测试模式下的支付状态（内存存储，重启后清空）
-const testPaymentStatus = new Map<string, { paid: boolean; createdAt: number; type: string }>()
-
 /**
- * 创建虎皮椒支付订单
+ * Create XunhuPay order
  * POST /api/shop/xunhupay
  * 
- * 请求体：
+ * Request body:
  * {
- *   orderId: string,      // 系统订单ID
- *   payType: 'wechat' | 'alipay'  // 支付方式
+ *   orderId: string,      // System order ID
+ *   payType: 'wechat' | 'alipay'  // Payment method
  * }
  */
 export async function POST(request: NextRequest) {
   try {
-    // 验证用户登录
+    // Verify user login
     const token = request.cookies.get('auth_token')?.value || request.cookies.get('token')?.value
     if (!token) {
       return NextResponse.json(
-        { success: false, error: '请先登录' },
+        { success: false, error: 'Please login first' },
         { status: 401 }
       )
     }
@@ -40,7 +33,7 @@ export async function POST(request: NextRequest) {
     const user = await verifyToken(token)
     if (!user) {
       return NextResponse.json(
-        { success: false, error: '登录已过期' },
+        { success: false, error: 'Login expired' },
         { status: 401 }
       )
     }
@@ -50,20 +43,20 @@ export async function POST(request: NextRequest) {
 
     if (!orderId) {
       return NextResponse.json(
-        { success: false, error: '订单ID不能为空' },
+        { success: false, error: 'Order ID is required' },
         { status: 400 }
       )
     }
 
-    // 验证支付方式
+    // Validate payment method
     if (!['wechat', 'alipay'].includes(payType)) {
       return NextResponse.json(
-        { success: false, error: '不支持的支付方式' },
+        { success: false, error: 'Unsupported payment method' },
         { status: 400 }
       )
     }
 
-    // 查询订单
+    // Query order
     const order = await prisma.orders.findUnique({
       where: { id: orderId },
       include: {
@@ -73,61 +66,28 @@ export async function POST(request: NextRequest) {
 
     if (!order) {
       return NextResponse.json(
-        { success: false, error: '订单不存在' },
+        { success: false, error: 'Order not found' },
         { status: 404 }
       )
     }
 
-    // 验证订单所属用户
+    // Verify order ownership
     if (order.userId !== user.id) {
       return NextResponse.json(
-        { success: false, error: '无权操作此订单' },
+        { success: false, error: 'No permission to operate this order' },
         { status: 403 }
       )
     }
 
-    // 检查订单状态
+    // Check order status
     if (order.status !== 'pending') {
       return NextResponse.json(
-        { success: false, error: '订单状态不允许支付' },
+        { success: false, error: 'Order status does not allow payment' },
         { status: 400 }
       )
     }
 
-    // 测试模式：返回模拟的支付链接
-    if (TEST_MODE) {
-      console.log('[测试模式] 创建模拟虎皮椒支付订单:', order.orderNo, '支付方式:', payType)
-      
-      // 记录测试支付状态
-      testPaymentStatus.set(order.orderNo, {
-        paid: false,
-        createdAt: Date.now(),
-        type: payType
-      })
-      
-      // 更新订单的支付方式
-      await prisma.orders.update({
-        where: { id: orderId },
-        data: {
-          paymentMethod: `xunhupay_${payType}`,
-          remark: '测试模式支付'
-        }
-      })
-      
-      return NextResponse.json({
-        success: true,
-        data: {
-          payUrl: `${process.env.NEXT_PUBLIC_SITE_URL || ''}/orders?test_pay=success&orderNo=${order.orderNo}`,
-          payQrcode: `test_qrcode_${payType}_${Date.now()}`,
-          orderNo: order.orderNo,
-          testMode: true,
-          autoSuccessMs: TEST_AUTO_SUCCESS_MS
-        }
-      })
-    }
-
-    // 非测试模式：需要真实的虎皮椒支付配置
-    // 优先从数据库获取配置，其次从环境变量获取
+    // Get XunhuPay config from database or environment variables
     let config = await getXunhuPayConfigFromDB()
     if (!config) {
       config = getXunhuPayConfig()
@@ -135,37 +95,37 @@ export async function POST(request: NextRequest) {
     
     if (!config) {
       return NextResponse.json(
-        { success: false, error: '虎皮椒支付未配置，请在后台配置支付渠道' },
+        { success: false, error: 'XunhuPay not configured, please configure payment channel in admin panel' },
         { status: 500 }
       )
     }
 
-    // 构建回调URL
+    // Build callback URL
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ''
     config.notifyUrl = `${siteUrl}/api/shop/xunhupay/notify`
 
-    // 调用虎皮椒创建订单
+    // Call XunhuPay create order
     const result = await createXunhuPayOrder(config, {
       trade_order_id: order.orderNo,
       total_fee: order.amount,
-      title: order.products?.name || '商品购买',
-      type: 'NATIVE'  // 扫码支付
+      title: order.products?.name || 'Product Purchase',
+      type: 'NATIVE'  // QR code payment
     }, payType)
 
     if (result.err_code !== 0) {
-      console.error('虎皮椒创建订单失败:', result.err_msg)
+      console.error('XunhuPay create order failed:', result.err_msg)
       return NextResponse.json(
-        { success: false, error: result.err_msg || '创建支付订单失败' },
+        { success: false, error: result.err_msg || 'Failed to create payment order' },
         { status: 500 }
       )
     }
 
-    // 更新订单的支付方式
+    // Update order payment method
     await prisma.orders.update({
       where: { id: orderId },
       data: {
         paymentMethod: `xunhupay_${payType}`,
-        remark: `虎皮椒订单号: ${result.order_id || ''}`
+        remark: `XunhuPay order ID: ${result.order_id || ''}`
       }
     })
 
@@ -179,25 +139,25 @@ export async function POST(request: NextRequest) {
       }
     })
   } catch (error) {
-    console.error('创建虎皮椒支付订单失败:', error)
+    console.error('Failed to create XunhuPay order:', error)
     return NextResponse.json(
-      { success: false, error: '创建支付订单失败' },
+      { success: false, error: 'Failed to create payment order' },
       { status: 500 }
     )
   }
 }
 
 /**
- * 查询虎皮椒支付订单状态
+ * Query XunhuPay order status
  * GET /api/shop/xunhupay?orderNo=xxx
  */
 export async function GET(request: NextRequest) {
   try {
-    // 验证用户登录
+    // Verify user login
     const token = request.cookies.get('auth_token')?.value || request.cookies.get('token')?.value
     if (!token) {
       return NextResponse.json(
-        { success: false, error: '请先登录' },
+        { success: false, error: 'Please login first' },
         { status: 401 }
       )
     }
@@ -205,7 +165,7 @@ export async function GET(request: NextRequest) {
     const user = await verifyToken(token)
     if (!user) {
       return NextResponse.json(
-        { success: false, error: '登录已过期' },
+        { success: false, error: 'Login expired' },
         { status: 401 }
       )
     }
@@ -215,32 +175,32 @@ export async function GET(request: NextRequest) {
 
     if (!orderNo) {
       return NextResponse.json(
-        { success: false, error: '订单号不能为空' },
+        { success: false, error: 'Order number is required' },
         { status: 400 }
       )
     }
 
-    // 查询本地订单
+    // Query local order
     const order = await prisma.orders.findFirst({
       where: { orderNo }
     })
 
     if (!order) {
       return NextResponse.json(
-        { success: false, error: '订单不存在' },
+        { success: false, error: 'Order not found' },
         { status: 404 }
       )
     }
 
-    // 验证订单所属用户
+    // Verify order ownership
     if (order.userId !== user.id && !user.isAdmin) {
       return NextResponse.json(
-        { success: false, error: '无权查看此订单' },
+        { success: false, error: 'No permission to view this order' },
         { status: 403 }
       )
     }
 
-    // 如果订单已支付，直接返回
+    // If order is already paid, return directly
     if (order.status === 'paid' || order.status === 'completed') {
       return NextResponse.json({
         success: true,
@@ -251,55 +211,7 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // 测试模式：模拟支付状态检查
-    if (TEST_MODE) {
-      const testStatus = testPaymentStatus.get(orderNo)
-      
-      // 如果没有测试状态记录，创建一个
-      if (!testStatus) {
-        testPaymentStatus.set(orderNo, {
-          paid: false,
-          createdAt: Date.now(),
-          type: 'wechat'
-        })
-      }
-      
-      const status = testPaymentStatus.get(orderNo)!
-      const elapsed = Date.now() - status.createdAt
-      
-      // 检查是否应该自动成功
-      if (!status.paid && TEST_AUTO_SUCCESS_MS > 0 && elapsed >= TEST_AUTO_SUCCESS_MS) {
-        status.paid = true
-        console.log('[测试模式] 自动支付成功:', orderNo)
-        
-        // 更新订单状态
-        await updateOrderPaid(order.id, `test_xunhupay_${Date.now()}`)
-        
-        return NextResponse.json({
-          success: true,
-          data: {
-            tradeState: 'SUCCESS',
-            tradeStateDesc: '支付成功（测试模式）',
-            orderStatus: 'paid',
-            testMode: true
-          }
-        })
-      }
-      
-      // 返回当前状态
-      return NextResponse.json({
-        success: true,
-        data: {
-          tradeState: status.paid ? 'SUCCESS' : 'NOTPAY',
-          tradeStateDesc: status.paid ? '支付成功（测试模式）' : '等待支付（测试模式）',
-          orderStatus: status.paid ? 'paid' : 'pending',
-          testMode: true,
-          remainingMs: TEST_AUTO_SUCCESS_MS > 0 ? Math.max(0, TEST_AUTO_SUCCESS_MS - elapsed) : null
-        }
-      })
-    }
-
-    // 非测试模式：查询虎皮椒订单状态
+    // Query XunhuPay config
     let config = await getXunhuPayConfigFromDB()
     if (!config) {
       config = getXunhuPayConfig()
@@ -307,24 +219,24 @@ export async function GET(request: NextRequest) {
     
     if (!config) {
       return NextResponse.json(
-        { success: false, error: '虎皮椒支付未配置' },
+        { success: false, error: 'XunhuPay not configured' },
         { status: 500 }
       )
     }
 
-    // 查询虎皮椒订单状态
+    // Query XunhuPay order status
     const result = await queryXunhuPayOrder(config, orderNo)
 
     if (result.err_code !== 0) {
       return NextResponse.json(
-        { success: false, error: result.err_msg || '查询订单失败' },
+        { success: false, error: result.err_msg || 'Failed to query order' },
         { status: 500 }
       )
     }
 
     const tradeStatus = result.status
 
-    // 如果支付成功，更新订单状态
+    // If payment successful, update order status
     if (tradeStatus === 'OD') {
       await updateOrderPaid(order.id, result.out_trade_order)
     }
@@ -333,22 +245,22 @@ export async function GET(request: NextRequest) {
       success: true,
       data: {
         tradeState: tradeStatus === 'OD' ? 'SUCCESS' : 'NOTPAY',
-        tradeStateDesc: tradeStatus === 'OD' ? '支付成功' : '等待支付',
+        tradeStateDesc: tradeStatus === 'OD' ? 'Payment successful' : 'Waiting for payment',
         orderStatus: tradeStatus === 'OD' ? 'paid' : order.status
       }
     })
   } catch (error) {
-    console.error('查询虎皮椒订单失败:', error)
+    console.error('Failed to query XunhuPay order:', error)
     return NextResponse.json(
-      { success: false, error: '查询订单失败' },
+      { success: false, error: 'Failed to query order' },
       { status: 500 }
     )
   }
 }
 
 /**
- * 更新订单为已支付状态
- * 处理密钥分配和会员权益
+ * Update order to paid status
+ * Handle key allocation and membership benefits
  */
 async function updateOrderPaid(orderId: string, transactionId: string) {
   const order = await prisma.orders.findUnique({
@@ -357,25 +269,25 @@ async function updateOrderPaid(orderId: string, transactionId: string) {
   })
 
   if (!order) {
-    console.error('[updateOrderPaid] 订单不存在:', orderId)
+    console.error('[updateOrderPaid] Order not found:', orderId)
     return
   }
 
-  console.log('[updateOrderPaid] 开始处理订单:', orderId, '产品类型:', order.products?.type)
+  console.log('[updateOrderPaid] Processing order:', orderId, 'Product type:', order.products?.type)
 
-  // 使用事务确保数据一致性
+  // Use transaction to ensure data consistency
   await prisma.$transaction(async (tx) => {
-    // 更新订单状态
+    // Update order status
     const updateData: any = {
       status: 'paid',
       paymentTime: new Date(),
       updatedAt: new Date(),
-      remark: `虎皮椒交易号: ${transactionId}`
+      remark: `XunhuPay transaction ID: ${transactionId}`
     }
 
-    // 如果产品需要密钥（库存不是无限），分配密钥
+    // If product requires key (stock is not unlimited), allocate key
     if (order.products && order.products.stock !== -1 && order.products.type === 'serial_key') {
-      console.log('[updateOrderPaid] 查找可用密钥...')
+      console.log('[updateOrderPaid] Finding available key...')
       
       const availableKey = await tx.product_keys.findFirst({
         where: {
@@ -385,9 +297,9 @@ async function updateOrderPaid(orderId: string, transactionId: string) {
       })
 
       if (availableKey) {
-        console.log('[updateOrderPaid] 找到密钥，分配给用户:', availableKey.key)
+        console.log('[updateOrderPaid] Key found, allocating to user:', availableKey.key)
         
-        // 更新密钥状态
+        // Update key status
         await tx.product_keys.update({
           where: { id: availableKey.id },
           data: {
@@ -397,16 +309,16 @@ async function updateOrderPaid(orderId: string, transactionId: string) {
           }
         })
         
-        // 更新订单的密钥字段
+        // Update order key field
         updateData.productKey = availableKey.key
       } else {
-        console.warn('[updateOrderPaid] 没有找到可用密钥，产品ID:', order.productId)
+        console.warn('[updateOrderPaid] No available key found, product ID:', order.productId)
       }
     }
 
-    // 如果是会员产品，更新用户会员状态
+    // If membership product, update user membership status
     if (order.products && order.products.type === 'membership' && order.products.duration) {
-      console.log('[updateOrderPaid] 处理会员权益，时长:', order.products.duration, '天')
+      console.log('[updateOrderPaid] Processing membership benefit, duration:', order.products.duration, 'days')
       
       const existingMembership = await tx.user_memberships.findUnique({
         where: { userId: order.userId }
@@ -417,7 +329,7 @@ async function updateOrderPaid(orderId: string, transactionId: string) {
       endDate.setDate(endDate.getDate() + order.products.duration)
 
       if (existingMembership) {
-        // 如果已有会员，延长会员时间
+        // If already a member, extend membership
         const newEndDate = new Date(existingMembership.endDate)
         newEndDate.setDate(newEndDate.getDate() + order.products.duration)
         
@@ -429,9 +341,9 @@ async function updateOrderPaid(orderId: string, transactionId: string) {
             updatedAt: new Date()
           }
         })
-        console.log('[updateOrderPaid] 会员已延长至:', newEndDate)
+        console.log('[updateOrderPaid] Membership extended to:', newEndDate)
       } else {
-        // 创建新会员
+        // Create new membership
         await tx.user_memberships.create({
           data: {
             id: `membership_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -441,16 +353,16 @@ async function updateOrderPaid(orderId: string, transactionId: string) {
             endDate
           }
         })
-        console.log('[updateOrderPaid] 新会员已创建，到期时间:', endDate)
+        console.log('[updateOrderPaid] New membership created, expiry:', endDate)
       }
     }
 
-    // 更新订单
+    // Update order
     await tx.orders.update({
       where: { id: orderId },
       data: updateData
     })
     
-    console.log('[updateOrderPaid] 订单更新完成:', orderId)
+    console.log('[updateOrderPaid] Order update completed:', orderId)
   })
 }

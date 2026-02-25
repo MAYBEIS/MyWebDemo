@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { hasAdminUser, createFirstAdmin, getDefaultAdminConfig } from '@/lib/db-init'
+import { hasAdminUser, createFirstAdmin, getDatabaseType, getDefaultAdminConfig } from '@/lib/db-init'
 
 /**
  * GET - Get setup status
@@ -12,10 +12,12 @@ import { hasAdminUser, createFirstAdmin, getDefaultAdminConfig } from '@/lib/db-
 export async function GET() {
   try {
     const needsSetup = !(await hasAdminUser())
+    const dbType = getDatabaseType()
     const defaultConfig = getDefaultAdminConfig()
 
     return NextResponse.json({
       needsSetup,
+      dbType,
       defaultEmail: defaultConfig.email || undefined,
       defaultName: defaultConfig.name || undefined,
       hasDefaultPassword: !!defaultConfig.password,

@@ -4,21 +4,29 @@
  */
 
 import { NextResponse } from 'next/server'
-import { hasAdminUser, hasAnyUser, isVercelPostgresEnabled, getDefaultAdminConfig } from '@/lib/db-init'
+import { 
+  hasAdminUser, 
+  hasAnyUser, 
+  getDatabaseType, 
+  isDatabaseConnected,
+  getDefaultAdminConfig 
+} from '@/lib/db-init'
 
 export async function GET() {
   try {
-    const [hasAdmin, hasUsers, vercelEnabled, defaultConfig] = await Promise.all([
+    const [hasAdmin, hasUsers, dbConnected, dbType, defaultConfig] = await Promise.all([
       hasAdminUser(),
       hasAnyUser(),
-      Promise.resolve(isVercelPostgresEnabled()),
+      isDatabaseConnected(),
+      Promise.resolve(getDatabaseType()),
       Promise.resolve(getDefaultAdminConfig()),
     ])
 
     return NextResponse.json({
       needsSetup: !hasAdmin,
       hasUsers,
-      vercelPostgresEnabled: vercelEnabled,
+      dbConnected,
+      dbType,
       // Provide default values for the setup form
       defaultEmail: defaultConfig.email || undefined,
       defaultName: defaultConfig.name || undefined,

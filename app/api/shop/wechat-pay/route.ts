@@ -14,25 +14,17 @@ import {
   generateFailResponse
 } from '@/lib/wechat-pay'
 
-// 测试模式配置
-const TEST_MODE = process.env.PAYMENT_TEST_MODE === 'true'
-const TEST_AUTO_SUCCESS_MS = parseInt(process.env.PAYMENT_TEST_AUTO_SUCCESS_MS || '5000', 10)
-const TEST_QR_CODE_URL = process.env.PAYMENT_TEST_QR_CODE_URL || 'weixin://wxpay/test_mode_simulated'
-
-// 存储测试模式下的支付状态（内存存储，重启后清空）
-const testPaymentStatus = new Map<string, { paid: boolean; createdAt: number }>()
-
 /**
- * 创建微信支付订单
+ * Create WeChat Pay order
  * POST /api/shop/wechat-pay
  */
 export async function POST(request: NextRequest) {
   try {
-    // 验证用户登录
+    // Verify user login
     const token = request.cookies.get('auth_token')?.value || request.cookies.get('token')?.value
     if (!token) {
       return NextResponse.json(
-        { success: false, error: '请先登录' },
+        { success: false, error: 'Please login first' },
         { status: 401 }
       )
     }
@@ -40,7 +32,7 @@ export async function POST(request: NextRequest) {
     const user = await verifyToken(token)
     if (!user) {
       return NextResponse.json(
-        { success: false, error: '登录已过期' },
+        { success: false, error: 'Login expired' },
         { status: 401 }
       )
     }
@@ -50,12 +42,12 @@ export async function POST(request: NextRequest) {
 
     if (!orderId) {
       return NextResponse.json(
-        { success: false, error: '订单ID不能为空' },
+        { success: false, error: 'Order ID is required' },
         { status: 400 }
       )
     }
 
-    // 查询订单
+    // Query order
     const order = await prisma.orders.findUnique({
       where: { id: orderId },
       include: {
@@ -65,60 +57,28 @@ export async function POST(request: NextRequest) {
 
     if (!order) {
       return NextResponse.json(
-        { success: false, error: '订单不存在' },
+        { success: false, error: 'Order not found' },
         { status: 404 }
       )
     }
 
-    // 验证订单所属用户
+    // Verify order ownership
     if (order.userId !== user.id) {
       return NextResponse.json(
-        { success: false, error: '无权操作此订单' },
+        { success: false, error: 'No permission to operate this order' },
         { status: 403 }
       )
     }
 
-    // 检查订单状态
+    // Check order status
     if (order.status !== 'pending') {
       return NextResponse.json(
-        { success: false, error: '订单状态不允许支付' },
+        { success: false, error: 'Order status does not allow payment' },
         { status: 400 }
       )
     }
 
-    // 测试模式：返回模拟的支付二维码（无需真实配置）
-    if (TEST_MODE) {
-      console.log('[测试模式] 创建模拟支付订单:', order.orderNo)
-      
-      // 记录测试支付状态
-      testPaymentStatus.set(order.orderNo, {
-        paid: false,
-        createdAt: Date.now()
-      })
-      
-      // 更新订单的支付方式
-      await prisma.orders.update({
-        where: { id: orderId },
-        data: {
-          paymentMethod: 'wechat',
-          remark: '测试模式支付'
-        }
-      })
-      
-      return NextResponse.json({
-        success: true,
-        data: {
-          prepayId: `test_prepay_id_${Date.now()}`,
-          codeUrl: TEST_QR_CODE_URL,
-          orderNo: order.orderNo,
-          testMode: true,
-          autoSuccessMs: TEST_AUTO_SUCCESS_MS
-        }
-      })
-    }
-
-    // 非测试模式：需要真实的微信支付配置
-    // 优先从数据库获取配置，其次从环境变量获取
+    // Get WeChat Pay config from database or environment variables
     let config = await getWechatPayConfigFromDB()
     if (!config) {
       config = getWechatPayConfig()
@@ -126,14 +86,14 @@ export async function POST(request: NextRequest) {
     
     if (!config) {
       return NextResponse.json(
-        { success: false, error: '微信支付未配置，请在后台配置支付渠道' },
+        { success: false, error: 'WeChat Pay not configured, please configure payment channel in admin panel' },
         { status: 500 }
       )
     }
 
-    // 调用微信统一下单接口
+    // Call WeChat unified order API
     const result = await unifiedOrder(config, {
-      body: order.products?.name || '商品购买',
+      body: order.products?.name || 'Product Purchase',
       outTradeNo: order.orderNo,
       totalFee: yuanToFen(order.amount),
       spbillCreateIp: request.headers.get('x-forwarded-for') || 
@@ -141,27 +101,27 @@ export async function POST(request: NextRequest) {
                       '127.0.0.1',
       tradeType: tradeType,
       productId: order.productId,
-      attach: order.id, // 附加订单ID用于回调
-      timeExpire: generateExpireTime(30) // 30分钟后过期
+      attach: order.id, // Attach order ID for callback
+      timeExpire: generateExpireTime(30) // Expire in 30 minutes
     })
 
     if (result.returnCode !== 'SUCCESS') {
-      console.error('微信统一下单失败:', result.returnMsg)
+      console.error('WeChat unified order failed:', result.returnMsg)
       return NextResponse.json(
-        { success: false, error: result.returnMsg || '创建支付订单失败' },
+        { success: false, error: result.returnMsg || 'Failed to create payment order' },
         { status: 500 }
       )
     }
 
     if (result.resultCode !== 'SUCCESS') {
-      console.error('微信统一下单业务失败:', result.errCodeDes)
+      console.error('WeChat unified order business failed:', result.errCodeDes)
       return NextResponse.json(
-        { success: false, error: result.errCodeDes || '创建支付订单失败' },
+        { success: false, error: result.errCodeDes || 'Failed to create payment order' },
         { status: 500 }
       )
     }
 
-    // 更新订单的预支付ID
+    // Update order with prepay ID
     await prisma.orders.update({
       where: { id: orderId },
       data: {
@@ -174,31 +134,31 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         prepayId: result.prepayId,
-        codeUrl: result.codeUrl,     // Native支付的二维码链接
-        mwebUrl: result.mwebUrl,     // H5支付跳转链接
+        codeUrl: result.codeUrl,     // QR code URL for Native payment
+        mwebUrl: result.mwebUrl,     // H5 payment redirect URL
         orderNo: order.orderNo
       }
     })
   } catch (error) {
-    console.error('创建微信支付订单失败:', error)
+    console.error('Failed to create WeChat Pay order:', error)
     return NextResponse.json(
-      { success: false, error: '创建支付订单失败' },
+      { success: false, error: 'Failed to create payment order' },
       { status: 500 }
     )
   }
 }
 
 /**
- * 查询微信支付订单状态
+ * Query WeChat Pay order status
  * GET /api/shop/wechat-pay?orderNo=xxx
  */
 export async function GET(request: NextRequest) {
   try {
-    // 验证用户登录
+    // Verify user login
     const token = request.cookies.get('auth_token')?.value || request.cookies.get('token')?.value
     if (!token) {
       return NextResponse.json(
-        { success: false, error: '请先登录' },
+        { success: false, error: 'Please login first' },
         { status: 401 }
       )
     }
@@ -206,7 +166,7 @@ export async function GET(request: NextRequest) {
     const user = await verifyToken(token)
     if (!user) {
       return NextResponse.json(
-        { success: false, error: '登录已过期' },
+        { success: false, error: 'Login expired' },
         { status: 401 }
       )
     }
@@ -216,32 +176,32 @@ export async function GET(request: NextRequest) {
 
     if (!orderNo) {
       return NextResponse.json(
-        { success: false, error: '订单号不能为空' },
+        { success: false, error: 'Order number is required' },
         { status: 400 }
       )
     }
 
-    // 查询本地订单
+    // Query local order
     const order = await prisma.orders.findFirst({
       where: { orderNo }
     })
 
     if (!order) {
       return NextResponse.json(
-        { success: false, error: '订单不存在' },
+        { success: false, error: 'Order not found' },
         { status: 404 }
       )
     }
 
-    // 验证订单所属用户
+    // Verify order ownership
     if (order.userId !== user.id && !user.isAdmin) {
       return NextResponse.json(
-        { success: false, error: '无权查看此订单' },
+        { success: false, error: 'No permission to view this order' },
         { status: 403 }
       )
     }
 
-    // 如果订单已支付，直接返回
+    // If order is already paid, return directly
     if (order.status === 'paid' || order.status === 'completed') {
       return NextResponse.json({
         success: true,
@@ -252,55 +212,7 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // 测试模式：模拟支付状态检查（无需真实配置）
-    if (TEST_MODE) {
-      const testStatus = testPaymentStatus.get(orderNo)
-      
-      // 如果没有测试状态记录，创建一个
-      if (!testStatus) {
-        testPaymentStatus.set(orderNo, {
-          paid: false,
-          createdAt: Date.now()
-        })
-      }
-      
-      const status = testPaymentStatus.get(orderNo)!
-      const elapsed = Date.now() - status.createdAt
-      
-      // 检查是否应该自动成功
-      if (!status.paid && TEST_AUTO_SUCCESS_MS > 0 && elapsed >= TEST_AUTO_SUCCESS_MS) {
-        status.paid = true
-        console.log('[测试模式] 自动支付成功:', orderNo)
-        
-        // 更新订单状态
-        await updateOrderPaid(order.id, `test_transaction_${Date.now()}`)
-        
-        return NextResponse.json({
-          success: true,
-          data: {
-            tradeState: 'SUCCESS',
-            tradeStateDesc: '支付成功（测试模式）',
-            orderStatus: 'paid',
-            testMode: true
-          }
-        })
-      }
-      
-      // 返回当前状态
-      return NextResponse.json({
-        success: true,
-        data: {
-          tradeState: status.paid ? 'SUCCESS' : 'NOTPAY',
-          tradeStateDesc: status.paid ? '支付成功（测试模式）' : '等待支付（测试模式）',
-          orderStatus: status.paid ? 'paid' : 'pending',
-          testMode: true,
-          remainingMs: TEST_AUTO_SUCCESS_MS > 0 ? Math.max(0, TEST_AUTO_SUCCESS_MS - elapsed) : null
-        }
-      })
-    }
-
-    // 非测试模式：需要真实的微信支付配置
-    // 优先从数据库获取配置，其次从环境变量获取
+    // Get WeChat Pay config from database or environment variables
     let config = await getWechatPayConfigFromDB()
     if (!config) {
       config = getWechatPayConfig()
@@ -308,31 +220,31 @@ export async function GET(request: NextRequest) {
     
     if (!config) {
       return NextResponse.json(
-        { success: false, error: '微信支付未配置，请在后台配置支付渠道' },
+        { success: false, error: 'WeChat Pay not configured, please configure payment channel in admin panel' },
         { status: 500 }
       )
     }
 
-    // 查询微信订单状态
+    // Query WeChat order status
     const result = await orderQuery(config, orderNo)
 
     if (result.return_code !== 'SUCCESS') {
       return NextResponse.json(
-        { success: false, error: result.return_msg || '查询订单失败' },
+        { success: false, error: result.return_msg || 'Failed to query order' },
         { status: 500 }
       )
     }
 
     if (result.result_code !== 'SUCCESS') {
       return NextResponse.json(
-        { success: false, error: result.err_code_des || '查询订单失败' },
+        { success: false, error: result.err_code_des || 'Failed to query order' },
         { status: 500 }
       )
     }
 
     const tradeState = result.trade_state
 
-    // 如果支付成功，更新订单状态
+    // If payment successful, update order status
     if (tradeState === 'SUCCESS') {
       await updateOrderPaid(order.id, result.transaction_id)
     }
@@ -346,17 +258,17 @@ export async function GET(request: NextRequest) {
       }
     })
   } catch (error) {
-    console.error('查询微信支付订单失败:', error)
+    console.error('Failed to query WeChat Pay order:', error)
     return NextResponse.json(
-      { success: false, error: '查询订单失败' },
+      { success: false, error: 'Failed to query order' },
       { status: 500 }
     )
   }
 }
 
 /**
- * 更新订单为已支付状态
- * 处理密钥分配和会员权益
+ * Update order to paid status
+ * Handle key allocation and membership benefits
  */
 async function updateOrderPaid(orderId: string, transactionId: string) {
   const order = await prisma.orders.findUnique({
@@ -365,25 +277,25 @@ async function updateOrderPaid(orderId: string, transactionId: string) {
   })
 
   if (!order) {
-    console.error('[updateOrderPaid] 订单不存在:', orderId)
+    console.error('[updateOrderPaid] Order not found:', orderId)
     return
   }
 
-  console.log('[updateOrderPaid] 开始处理订单:', orderId, '产品类型:', order.products?.type, '库存:', order.products?.stock)
+  console.log('[updateOrderPaid] Processing order:', orderId, 'Product type:', order.products?.type, 'Stock:', order.products?.stock)
 
-  // 使用事务确保数据一致性
+  // Use transaction to ensure data consistency
   await prisma.$transaction(async (tx) => {
-    // 更新订单状态
+    // Update order status
     const updateData: any = {
       status: 'paid',
       paymentTime: new Date(),
       updatedAt: new Date(),
-      remark: `微信支付交易号: ${transactionId}`
+      remark: `WeChat Pay transaction ID: ${transactionId}`
     }
 
-    // 如果产品需要密钥（库存不是无限），分配密钥
+    // If product requires key (stock is not unlimited), allocate key
     if (order.products && order.products.stock !== -1 && order.products.type === 'serial_key') {
-      console.log('[updateOrderPaid] 查找可用密钥...')
+      console.log('[updateOrderPaid] Finding available key...')
       
       const availableKey = await tx.product_keys.findFirst({
         where: {
@@ -393,9 +305,9 @@ async function updateOrderPaid(orderId: string, transactionId: string) {
       })
 
       if (availableKey) {
-        console.log('[updateOrderPaid] 找到密钥，分配给用户:', availableKey.key)
+        console.log('[updateOrderPaid] Key found, allocating to user:', availableKey.key)
         
-        // 更新密钥状态
+        // Update key status
         await tx.product_keys.update({
           where: { id: availableKey.id },
           data: {
@@ -405,16 +317,16 @@ async function updateOrderPaid(orderId: string, transactionId: string) {
           }
         })
         
-        // 更新订单的密钥字段
+        // Update order key field
         updateData.productKey = availableKey.key
       } else {
-        console.warn('[updateOrderPaid] 没有找到可用密钥，产品ID:', order.productId)
+        console.warn('[updateOrderPaid] No available key found, product ID:', order.productId)
       }
     }
 
-    // 如果是会员产品，更新用户会员状态
+    // If membership product, update user membership status
     if (order.products && order.products.type === 'membership' && order.products.duration) {
-      console.log('[updateOrderPaid] 处理会员权益，时长:', order.products.duration, '天')
+      console.log('[updateOrderPaid] Processing membership benefit, duration:', order.products.duration, 'days')
       
       const existingMembership = await tx.user_memberships.findUnique({
         where: { userId: order.userId }
@@ -425,7 +337,7 @@ async function updateOrderPaid(orderId: string, transactionId: string) {
       endDate.setDate(endDate.getDate() + order.products.duration)
 
       if (existingMembership) {
-        // 如果已有会员，延长会员时间
+        // If already a member, extend membership
         const newEndDate = new Date(existingMembership.endDate)
         newEndDate.setDate(newEndDate.getDate() + order.products.duration)
         
@@ -437,9 +349,9 @@ async function updateOrderPaid(orderId: string, transactionId: string) {
             updatedAt: new Date()
           }
         })
-        console.log('[updateOrderPaid] 会员已延长至:', newEndDate)
+        console.log('[updateOrderPaid] Membership extended to:', newEndDate)
       } else {
-        // 创建新会员
+        // Create new membership
         await tx.user_memberships.create({
           data: {
             id: `membership_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -449,16 +361,16 @@ async function updateOrderPaid(orderId: string, transactionId: string) {
             endDate
           }
         })
-        console.log('[updateOrderPaid] 新会员已创建，到期时间:', endDate)
+        console.log('[updateOrderPaid] New membership created, expiry:', endDate)
       }
     }
 
-    // 更新订单
+    // Update order
     await tx.orders.update({
       where: { id: orderId },
       data: updateData
     })
     
-    console.log('[updateOrderPaid] 订单更新完成:', orderId)
+    console.log('[updateOrderPaid] Order update completed:', orderId)
   })
 }
