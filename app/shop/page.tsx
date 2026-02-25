@@ -220,6 +220,13 @@ export default function ShopPage() {
       if (data.success) {
         const orderId = data.data.id
         
+        // 如果用户已是会员，显示提示信息
+        if (data.membershipInfo) {
+          toast.info(data.membershipInfo.message, {
+            duration: 5000
+          })
+        }
+        
         // 根据选择的支付方式调用不同的支付接口
         if (selectedPaymentMethod === 'wechat') {
           // 微信支付

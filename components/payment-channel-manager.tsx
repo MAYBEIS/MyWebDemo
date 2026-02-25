@@ -385,58 +385,65 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
 
                 {/* 基本配置 */}
                 <TabsContent value="basic" className="space-y-4 mt-4">
-                  {/* 使用当前域名开关 */}
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border">
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-4 w-4 text-primary" />
-                      <div>
-                        <Label className="font-medium">使用当前域名</Label>
-                        <p className="text-xs text-muted-foreground">
-                          自动填充回调地址：{currentDomain}/api/shop/xunhupay/notify
-                        </p>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={useCurrentDomain}
-                      onCheckedChange={handleToggleUseCurrentDomain}
-                    />
-                  </div>
-
-                  {(selectedChannel.configFields || []).map((field) => (
-                    <div key={field.key} className="grid gap-2">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor={field.key}>
-                          {field.label}
-                          {field.required && <span className="text-destructive ml-1">*</span>}
-                        </Label>
-                        {field.type === 'password' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-2"
-                            onClick={() => toggleShowSecret(field.key)}
-                          >
-                            {showSecret[field.key] ? (
-                              <EyeOff className="h-3.5 w-3.5" />
-                            ) : (
-                              <Eye className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
+                  {(selectedChannel.configFields || []).map((field) => {
+                    // 在 notifyUrl 字段前插入"使用当前域名"开关
+                    const isNotifyUrl = field.key === 'notifyUrl'
+                    
+                    return (
+                      <div key={field.key} className="grid gap-2">
+                        {/* 如果是 notifyUrl 字段，在前面显示使用当前域名开关 */}
+                        {isNotifyUrl && (
+                          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border mb-2">
+                            <div className="flex items-center gap-2">
+                              <Globe className="h-4 w-4 text-primary" />
+                              <div>
+                                <Label className="font-medium">使用当前域名</Label>
+                                <p className="text-xs text-muted-foreground">
+                                  自动填充回调地址
+                                </p>
+                              </div>
+                            </div>
+                            <Switch
+                              checked={useCurrentDomain}
+                              onCheckedChange={handleToggleUseCurrentDomain}
+                            />
+                          </div>
+                        )}
+                        
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor={field.key}>
+                            {field.label}
+                            {field.required && <span className="text-destructive ml-1">*</span>}
+                          </Label>
+                          {field.type === 'password' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2"
+                              onClick={() => toggleShowSecret(field.key)}
+                            >
+                              {showSecret[field.key] ? (
+                                <EyeOff className="h-3.5 w-3.5" />
+                              ) : (
+                                <Eye className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                        <Input
+                          id={field.key}
+                          type={field.type === 'password' && !showSecret[field.key] ? 'password' : 'text'}
+                          value={getEditedConfigValue(field.key)}
+                          onChange={(e) => setConfigValue(field.key, e.target.value)}
+                          placeholder={field.placeholder}
+                          className="bg-background/30"
+                        />
+                        {field.helpText && (
+                          <p className="text-xs text-muted-foreground">{field.helpText}</p>
                         )}
                       </div>
-                      <Input
-                        id={field.key}
-                        type={field.type === 'password' && !showSecret[field.key] ? 'password' : 'text'}
-                        value={getEditedConfigValue(field.key)}
-                        onChange={(e) => setConfigValue(field.key, e.target.value)}
-                        placeholder={field.placeholder}
-                        className="bg-background/30"
-                      />
-                      {field.helpText && (
-                        <p className="text-xs text-muted-foreground">{field.helpText}</p>
-                      )}
-                    </div>
-                  ))}
+                    )
+                  })}
                 </TabsContent>
 
                 {/* 支付方式配置 */}
@@ -522,58 +529,65 @@ export function PaymentChannelManager({ initialChannels }: PaymentChannelManager
             // 其他支付渠道配置
             selectedChannel && (
               <div className="space-y-4 py-4">
-                {/* 使用当前域名开关 */}
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border">
-                  <div className="flex items-center gap-2">
-                    <Globe className="h-4 w-4 text-primary" />
-                    <div>
-                      <Label className="font-medium">使用当前域名</Label>
-                      <p className="text-xs text-muted-foreground">
-                        自动填充回调地址：{currentDomain}/api/shop/{selectedChannel.code}/notify
-                      </p>
-                    </div>
-                  </div>
-                  <Switch
-                    checked={useCurrentDomain}
-                    onCheckedChange={handleToggleUseCurrentDomain}
-                  />
-                </div>
-
-                {(selectedChannel.configFields || []).map((field) => (
-                  <div key={field.key} className="grid gap-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor={field.key}>
-                        {field.label}
-                        {field.required && <span className="text-destructive ml-1">*</span>}
-                      </Label>
-                      {field.type === 'password' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2"
-                          onClick={() => toggleShowSecret(field.key)}
-                        >
-                          {showSecret[field.key] ? (
-                            <EyeOff className="h-3.5 w-3.5" />
-                          ) : (
-                            <Eye className="h-3.5 w-3.5" />
-                          )}
-                        </Button>
+                {(selectedChannel.configFields || []).map((field) => {
+                  // 在 notifyUrl 字段前插入"使用当前域名"开关
+                  const isNotifyUrl = field.key === 'notifyUrl'
+                  
+                  return (
+                    <div key={field.key} className="grid gap-2">
+                      {/* 如果是 notifyUrl 字段，在前面显示使用当前域名开关 */}
+                      {isNotifyUrl && (
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border mb-2">
+                          <div className="flex items-center gap-2">
+                            <Globe className="h-4 w-4 text-primary" />
+                            <div>
+                              <Label className="font-medium">使用当前域名</Label>
+                              <p className="text-xs text-muted-foreground">
+                                自动填充回调地址
+                              </p>
+                            </div>
+                          </div>
+                          <Switch
+                            checked={useCurrentDomain}
+                            onCheckedChange={handleToggleUseCurrentDomain}
+                          />
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor={field.key}>
+                          {field.label}
+                          {field.required && <span className="text-destructive ml-1">*</span>}
+                        </Label>
+                        {field.type === 'password' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2"
+                            onClick={() => toggleShowSecret(field.key)}
+                          >
+                            {showSecret[field.key] ? (
+                              <EyeOff className="h-3.5 w-3.5" />
+                            ) : (
+                              <Eye className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                      <Input
+                        id={field.key}
+                        type={field.type === 'password' && !showSecret[field.key] ? 'password' : 'text'}
+                        value={getEditedConfigValue(field.key) || getConfigValue(selectedChannel, field.key)}
+                        onChange={(e) => setConfigValue(field.key, e.target.value)}
+                        placeholder={field.placeholder}
+                        className="bg-background/30"
+                      />
+                      {field.helpText && (
+                        <p className="text-xs text-muted-foreground">{field.helpText}</p>
                       )}
                     </div>
-                    <Input
-                      id={field.key}
-                      type={field.type === 'password' && !showSecret[field.key] ? 'password' : 'text'}
-                      value={getEditedConfigValue(field.key) || getConfigValue(selectedChannel, field.key)}
-                      onChange={(e) => setConfigValue(field.key, e.target.value)}
-                      placeholder={field.placeholder}
-                      className="bg-background/30"
-                    />
-                    {field.helpText && (
-                      <p className="text-xs text-muted-foreground">{field.helpText}</p>
-                    )}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )
           )}
