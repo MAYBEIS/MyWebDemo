@@ -316,6 +316,8 @@ model trending_topics {
   title       String   // 话题标题
   description String   // 话题描述
   category    String   // 分类
+  voteType    String   @default("binary")  // 投票类型: binary(赞同/否定), multiple(多选一)
+  options     String?  // 投票选项JSON数组（仅多选一类型使用）
   votes       Int      @default(0)  // 票数（赞同-反对）
   heat        Int      @default(0)  // 热度值
   tags        String?  // 标签JSON数组

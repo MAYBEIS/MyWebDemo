@@ -102,6 +102,8 @@ export async function GET(request: NextRequest) {
         title: topic.title,
         description: topic.description,
         category: topic.category,
+        voteType: topic.voteType || 'binary',  // 投票类型: binary(赞同/否定), multiple(多选一)
+        options: topic.options ? JSON.parse(topic.options) : null,  // 投票选项
         upvotes,
         downvotes,
         heat: topic.heat,
@@ -164,6 +166,10 @@ export async function POST(request: NextRequest) {
       }
 
       // 创建新话题
+      const voteOptions = body.voteType === 'multiple' && body.options
+        ? body.options.split('\n').filter((o: string) => o.trim()).map((o: string, i: number) => ({ id: `opt_${i}`, text: o.trim(), count: 0 }))
+        : null
+
       const newTopic = await prisma.trending_topics.create({
         data: {
           id: `topic_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -173,6 +179,8 @@ export async function POST(request: NextRequest) {
           tags: tags ? JSON.stringify(tags) : null,
           proposedBy: user.name,
           status: 'active', // 新话题直接显示
+          voteType: body.voteType || 'binary',  // 投票类型
+          options: voteOptions ? JSON.stringify(voteOptions) : null,  // 投票选项
           votes: 0,
           heat: 1, // 初始热度
           endTime: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24小时后过期

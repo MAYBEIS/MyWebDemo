@@ -68,6 +68,8 @@ interface Topic {
   title: string
   description: string
   category: string
+  voteType: 'binary' | 'multiple'  // binary: 赞同/否定, multiple: 多选一
+  options?: { id: string; text: string; count: number }[]  // 投票选项
   upvotes: number
   downvotes: number
   heat: number
@@ -115,13 +117,7 @@ function TopicSkeleton() {
   return (
     <div className="rounded-xl border border-border/40 bg-card/30 p-6">
       <div className="flex gap-4">
-        {/* 投票栏骨架 */}
-        <div className="flex flex-col items-center gap-1 shrink-0">
-          <Skeleton className="h-8 w-8 rounded-lg" />
-          <Skeleton className="h-4 w-8" />
-          <Skeleton className="h-8 w-8 rounded-lg" />
-        </div>
-        {/* 内容骨架 */}
+        {/* 内容骨架 - 无投票按钮 */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <Skeleton className="h-4 w-8" />
@@ -158,6 +154,8 @@ export function TrendingTopics() {
     description: "",
     category: "技术选型",
     tags: "",
+    voteType: "binary" as "binary" | "multiple",
+    options: "",
   })
 
   // 从API获取话题数据
@@ -322,7 +320,7 @@ export function TrendingTopics() {
       if (data.success) {
         toast.success("话题提议成功，等待审核")
         setProposeDialogOpen(false)
-        setProposeForm({ title: "", description: "", category: "技术选型", tags: "" })
+        setProposeForm({ title: "", description: "", category: "技术选型", tags: "", voteType: "binary", options: "" })
       } else {
         toast.error(data.error || "提议话题失败")
       }
@@ -437,52 +435,7 @@ export function TrendingTopics() {
               >
                 <div className="p-6">
                   <div className="flex gap-4">
-                    {/* Vote column - 左右布局 */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      {/* 赞同按钮和数量 */}
-                      <div className="flex flex-col items-center">
-                        <button
-                          onClick={() => handleVote(topic.id, "up")}
-                          disabled={!isLoggedIn}
-                          className={`flex h-8 w-10 items-center justify-center rounded-lg border transition-all duration-300 ${
-                            currentVote === "up"
-                              ? "border-primary/50 bg-primary/20 text-primary"
-                              : "border-border/40 text-muted-foreground/40 hover:border-primary/20 hover:text-primary"
-                          } ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                          <ChevronUp className="h-4 w-4" />
-                        </button>
-                        <span className={`text-sm font-bold font-mono mt-1 ${
-                          currentVote === "up" ? "text-primary" : 
-                          "text-foreground"
-                        }`}>
-                          {topic.upvotes}
-                        </span>
-                      </div>
-                      
-                      {/* 否定按钮和数量 */}
-                      <div className="flex flex-col items-center">
-                        <button
-                          onClick={() => handleVote(topic.id, "down")}
-                          disabled={!isLoggedIn}
-                          className={`flex h-8 w-10 items-center justify-center rounded-lg border transition-all duration-300 ${
-                            currentVote === "down"
-                              ? "border-destructive/50 bg-destructive/20 text-destructive"
-                              : "border-border/30 text-muted-foreground/40 hover:border-destructive/20 hover:text-destructive"
-                          } ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                          <ChevronDown className="h-4 w-4" />
-                        </button>
-                        <span className={`text-sm font-bold font-mono mt-1 ${
-                          currentVote === "down" ? "text-destructive" : 
-                          "text-foreground"
-                        }`}>
-                          {topic.downvotes}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Content */}
+                    {/* Content - 无投票按钮，只在展开后显示投票 */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <span className="text-xs font-bold text-muted-foreground/30 font-mono">#{index + 1}</span>
@@ -529,65 +482,120 @@ export function TrendingTopics() {
                   </div>
                 </div>
 
-                {/* Expanded comments */}
+                {/* Expanded content with voting */}
                 {isExpanded && (
-                  <div className="border-t border-border/30 p-6 pt-5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Sparkles className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-semibold text-foreground">社区讨论</span>
-                    </div>
-
-                    {topic.comments.length > 0 ? (
-                      <div className="flex flex-col gap-3 mb-5">
-                        {topic.comments.map((comment) => (
-                          <div key={comment.id} className="flex gap-3 rounded-lg bg-background/30 p-3">
-                            <Avatar className="h-7 w-7 border border-border/30 shrink-0">
-                              <AvatarFallback className="text-[9px] font-mono bg-primary/8 text-primary/70">
-                                {comment.avatar || comment.author.slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className={`text-xs font-medium ${comment.author === topic.proposedBy ? "text-primary" : "text-foreground/80"}`}>
-                                  {comment.author}
-                                </span>
-                                {comment.author === topic.proposedBy && (
-                                  <span className="text-[9px] font-mono px-1 py-0 rounded bg-primary/10 text-primary">作者</span>
-                                )}
-                                <span className="text-[10px] text-muted-foreground/30">{comment.time}</span>
-                              </div>
-                              <p className="text-sm text-foreground/60 leading-relaxed">{comment.content}</p>
-                            </div>
+                  <div className="border-t border-border/30">
+                    <div className="p-6 pt-5 bg-card/20">
+                      <div className="flex items-start gap-6">
+                        {/* 讨论区 */}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-4">
+                            <Sparkles className="h-4 w-4 text-primary" />
+                            <span className="text-sm font-semibold text-foreground">社区讨论</span>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground/30 mb-5 font-mono">{"// 暂无讨论，来发表第一条观点吧"}</p>
-                    )}
 
-                    {isLoggedIn ? (
-                      <div className="flex gap-2">
-                        <Textarea
-                          placeholder="分享你的观点..."
-                          value={newCommentText}
-                          onChange={(e) => setNewCommentText(e.target.value)}
-                          className="bg-background/30 border-border/40 focus:border-primary/40 min-h-[60px] resize-none rounded-lg text-sm flex-1"
-                        />
-                        <Button
-                          size="sm"
-                          onClick={() => handleComment(topic.id)}
-                          className="bg-primary text-primary-foreground hover:bg-primary/90 self-end h-9"
-                        >
-                          发送
-                        </Button>
+                          {topic.comments.length > 0 ? (
+                            <div className="flex flex-col gap-3 mb-5">
+                              {topic.comments.map((comment) => (
+                                <div key={comment.id} className="flex gap-3 rounded-lg bg-background/30 p-3">
+                                  <Avatar className="h-7 w-7 border border-border/30 shrink-0">
+                                    <AvatarFallback className="text-[9px] font-mono bg-primary/8 text-primary/70">
+                                      {comment.avatar || comment.author.slice(0, 2).toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className={`text-xs font-medium ${comment.author === topic.proposedBy ? "text-primary" : "text-foreground/80"}`}>
+                                        {comment.author}
+                                      </span>
+                                      {comment.author === topic.proposedBy && (
+                                        <span className="text-[9px] font-mono px-1 py-0 rounded bg-primary/10 text-primary">作者</span>
+                                      )}
+                                      <span className="text-[10px] text-muted-foreground/30">{comment.time}</span>
+                                    </div>
+                                    <p className="text-sm text-foreground/60 leading-relaxed">{comment.content}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground/30 mb-5 font-mono">{"// 暂无讨论，来发表第一条观点吧"}</p>
+                          )}
+
+                          {isLoggedIn ? (
+                            <div className="flex gap-2">
+                              <Textarea
+                                placeholder="分享你的观点..."
+                                value={newCommentText}
+                                onChange={(e) => setNewCommentText(e.target.value)}
+                                className="bg-background/30 border-border/40 focus:border-primary/40 min-h-[60px] resize-none rounded-lg text-sm flex-1"
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => handleComment(topic.id)}
+                                className="bg-primary text-primary-foreground hover:bg-primary/90 self-end h-9"
+                              >
+                                发送
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="text-center py-3">
+                              <Button size="sm" variant="outline" className="border-border/40 text-sm gap-1.5" onClick={() => toast.error("请先登录后参与讨论")}>
+                                登录后参与讨论
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 投票区域 - 右侧显示 */}
+                        <div className="flex flex-col items-center gap-3 shrink-0 min-w-[140px]">
+                          <span className="text-xs font-medium text-muted-foreground/50">观点投票</span>
+                          {/* 赞同 */}
+                          <div className="flex flex-col items-center">
+                            <button
+                              onClick={() => handleVote(topic.id, "up")}
+                              disabled={!isLoggedIn}
+                              className={`flex h-10 w-24 items-center justify-center rounded-lg border transition-all duration-300 gap-1 ${
+                                currentVote === "up"
+                                  ? "border-primary/50 bg-primary/20 text-primary"
+                                  : "border-border/40 text-muted-foreground/60 hover:border-primary/30 hover:text-primary hover:bg-primary/5"
+                              } ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              <ChevronUp className="h-4 w-4" />
+                              <span className="text-sm font-medium">赞同</span>
+                            </button>
+                            <span className={`text-lg font-bold font-mono mt-1.5 ${
+                              currentVote === "up" ? "text-primary" : 
+                              "text-foreground"
+                            }`}>
+                              {topic.upvotes}
+                            </span>
+                          </div>
+                          
+                          {/* 否定 */}
+                          <div className="flex flex-col items-center mt-2">
+                            <button
+                              onClick={() => handleVote(topic.id, "down")}
+                              disabled={!isLoggedIn}
+                              className={`flex h-10 w-24 items-center justify-center rounded-lg border transition-all duration-300 gap-1 ${
+                                currentVote === "down"
+                                  ? "border-destructive/50 bg-destructive/20 text-destructive"
+                                  : "border-border/40 text-muted-foreground/60 hover:border-destructive/30 hover:text-destructive hover:bg-destructive/5"
+                              } ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                              <span className="text-sm font-medium">否定</span>
+                            </button>
+                            <span className={`text-lg font-bold font-mono mt-1.5 ${
+                              currentVote === "down" ? "text-destructive" : 
+                              "text-foreground"
+                            }`}>
+                              {topic.downvotes}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                    ) : (
-                      <div className="text-center py-3">
-                        <Button size="sm" variant="outline" className="border-border/40 text-sm gap-1.5" onClick={() => toast.error("请先登录后参与讨论")}>
-                          登录后参与讨论
-                        </Button>
-                      </div>
-                    )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -674,6 +682,40 @@ export function TrendingTopics() {
                 onChange={(e) => setProposeForm({ ...proposeForm, tags: e.target.value })}
               />
             </div>
+
+            {/* 投票类型选择 */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">投票类型</label>
+              <div className="flex gap-2">
+                <Button
+                  variant={proposeForm.voteType === "binary" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setProposeForm({ ...proposeForm, voteType: "binary", options: "" })}
+                >
+                  赞同/否定
+                </Button>
+                <Button
+                  variant={proposeForm.voteType === "multiple" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setProposeForm({ ...proposeForm, voteType: "multiple" })}
+                >
+                  多选一
+                </Button>
+              </div>
+            </div>
+
+            {/* 投票选项 - 仅多选一类型显示 */}
+            {proposeForm.voteType === "multiple" && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">投票选项（每行一个选项）</label>
+                <Textarea
+                  placeholder="选项A&#10;选项B&#10;选项C"
+                  value={proposeForm.options}
+                  onChange={(e) => setProposeForm({ ...proposeForm, options: e.target.value })}
+                  className="min-h-[80px]"
+                />
+              </div>
+            )}
           </div>
 
           <DialogFooter>
