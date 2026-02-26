@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser, verifyToken } from '@/lib/auth-service'
 
+// 获取当前请求中的用户（支持从header或cookie获取）
+async function getUserFromRequest(request: NextRequest) {
+  // 首先尝试从header获取
+  const authHeader = request.headers.get('authorization')
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7)
+    return await verifyToken(token)
+  }
+  
+  // 然后尝试从cookie获取
+  const cookieHeader = request.headers.get('cookie')
+  if (cookieHeader) {
+    const tokenMatch = cookieHeader.match(/auth_token=([^;]+)/)
+    if (tokenMatch) {
+      return await verifyToken(tokenMatch[1])
+    }
+  }
+  
+  return null
+}
+
 // 获取今日热榜话题
 export async function GET(request: NextRequest) {
   try {
@@ -114,17 +135,8 @@ export async function GET(request: NextRequest) {
 // 投票
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
-    
-    if (!authHeader) {
-      return NextResponse.json({ 
-        success: false, 
-        error: '请先登录' 
-      }, { status: 401 })
-    }
-
-    const token = authHeader.replace('Bearer ', '')
-    const user = await verifyToken(token)
+    // 支持从header或cookie获取用户
+    const user = await getUserFromRequest(request)
     
     if (!user) {
       return NextResponse.json({ 
@@ -133,8 +145,41 @@ export async function POST(request: NextRequest) {
       }, { status: 401 })
     }
 
-    const { topicId, direction } = await request.json()
+    const body = await request.json()
+    const { action, topicId, direction, title, description, category, tags } = body
 
+    // 提议话题
+    if (action === 'propose') {
+      if (!title || !description) {
+        return NextResponse.json({ 
+          success: false, 
+          error: '缺少必要参数' 
+        }, { status: 400 })
+      }
+
+      // 创建新话题
+      const newTopic = await prisma.trending_topics.create({
+        data: {
+          id: `topic_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          title,
+          description,
+          category: category || '技术选型',
+          tags: tags ? JSON.stringify(tags) : null,
+          proposedBy: user.name,
+          status: 'active', // 新话题直接显示
+          votes: 0,
+          heat: 1, // 初始热度
+          endTime: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24小时后过期
+        }
+      })
+
+      return NextResponse.json({ 
+        success: true, 
+        data: { id: newTopic.id }
+      })
+    }
+
+    // 投票操作
     if (!topicId || !direction) {
       return NextResponse.json({ 
         success: false, 
