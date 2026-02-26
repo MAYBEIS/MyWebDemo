@@ -69,16 +69,17 @@ interface Topic {
   description: string
   category: string
   voteType: 'binary' | 'multiple'  // binary: 赞同/否定, multiple: 多选一
-  options?: { id: string; text: string; count: number }[]  // 投票选项
+  options?: { id: string; text: string; votes: number }[]  // 投票选项
   upvotes: number
   downvotes: number
+  totalVotes: number  // 总投票数
   heat: number
   comments: TopicComment[]
   commentCount: number
   tags: string[]
   proposedBy: string
   timeLeft: string
-  userVote: 'up' | 'down' | null
+  userVote: 'up' | 'down' | string | null  // binary类型为up/down，multiple类型为optionId
 }
 
 const today = new Date().toLocaleDateString("zh-CN", { month: "long", day: "numeric" })
@@ -139,8 +140,10 @@ function TopicSkeleton() {
 export function TrendingTopics() {
   const [topics, setTopics] = useState<Topic[]>([])
   const [loading, setLoading] = useState(true)
-  // 使用Map记录每个话题的投票状态：undefined=未投票, 'up'=赞同, 'down'=反对
-  const [voteState, setVoteState] = useState<Map<string, 'up' | 'down'>>(new Map())
+  // 使用Map记录每个话题的投票状态
+  // binary类型: 'up'=赞同, 'down'=反对
+  // multiple类型: optionId=用户选择的选项ID
+  const [voteState, setVoteState] = useState<Map<string, 'up' | 'down' | string>>(new Map())
   const [expandedTopic, setExpandedTopic] = useState<string | null>(null)
   const [newCommentText, setNewCommentText] = useState("")
   const [sortBy, setSortBy] = useState<"votes" | "heat" | "comments">("votes")
@@ -170,7 +173,7 @@ export function TrendingTopics() {
         if (data.success && data.data) {
           setTopics(data.data)
           // 设置用户的投票状态
-          const newVoteState = new Map<string, 'up' | 'down'>()
+          const newVoteState = new Map<string, 'up' | 'down' | string>()
           data.data.forEach((topic: Topic) => {
             if (topic.userVote) {
               newVoteState.set(topic.id, topic.userVote)
@@ -267,6 +270,89 @@ export function TrendingTopics() {
     }
   }
 
+  // 多选一投票处理
+  const handleMultipleVote = async (topicId: string, optionId: string) => {
+    if (!isLoggedIn) {
+      toast.error("请先登录后再投票")
+      return
+    }
+    
+    // 先乐观更新UI
+    const currentVote = voteState.get(topicId)
+    
+    if (currentVote === optionId) {
+      // 取消投票
+      const newVoteState = new Map(voteState)
+      newVoteState.delete(topicId)
+      setVoteState(newVoteState)
+      
+      // 更新本地票数
+      setTopics(topics.map((t) =>
+        t.id === topicId && t.options
+          ? { 
+              ...t, 
+              options: t.options.map(o => 
+                o.id === optionId ? { ...o, votes: Math.max(0, o.votes - 1) } : o
+              ),
+              totalVotes: Math.max(0, (t.totalVotes || 0) - 1),
+              heat: Math.max(0, t.heat - 2)
+            } 
+          : t
+      ))
+    } else {
+      // 投票/切换投票
+      const oldVote = currentVote
+      setVoteState(new Map(voteState).set(topicId, optionId))
+      
+      // 更新本地票数
+      setTopics(topics.map((t) =>
+        t.id === topicId && t.options
+          ? { 
+              ...t, 
+              options: t.options.map(o => {
+                if (o.id === optionId) {
+                  return { ...o, votes: o.votes + 1 }
+                }
+                if (o.id === oldVote) {
+                  return { ...o, votes: Math.max(0, o.votes - 1) }
+                }
+                return o
+              }),
+              totalVotes: (t.totalVotes || 0) + (oldVote ? 0 : 1),
+              heat: Math.min(100, t.heat + (oldVote ? 0 : 2))
+            } 
+          : t
+      ))
+    }
+    
+    // 调用API
+    try {
+      const response = await fetch('/api/trending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // 包含cookie
+        body: JSON.stringify({ 
+          topicId, 
+          voteType: 'multiple',
+          optionId 
+        }),
+      })
+      const data = await response.json()
+      if (!data.success) {
+        toast.error(data.error || '投票失败')
+        // 重新获取数据
+        const fetchResponse = await fetch(`/api/trending?sortBy=${sortBy}`, { credentials: 'include' })
+        const fetchData = await fetchResponse.json()
+        if (fetchData.success && fetchData.data) {
+          setTopics(fetchData.data)
+        }
+      }
+    } catch (error) {
+      console.error('投票失败:', error)
+      toast.error('投票失败，请稍后重试')
+    }
+  }
+
   const handleComment = (topicId: string) => {
     if (!isLoggedIn || !user) {
       toast.error("请先登录后再评论")
@@ -316,6 +402,8 @@ export function TrendingTopics() {
           description: proposeForm.description,
           category: proposeForm.category,
           tags: proposeForm.tags.split(',').map(t => t.trim()).filter(t => t),
+          voteType: proposeForm.voteType,
+          options: proposeForm.voteType === 'multiple' ? proposeForm.options : undefined,
         }),
       })
       const data = await response.json()
@@ -334,10 +422,10 @@ export function TrendingTopics() {
     }
   }
 
-  // 总投票数 = 所有话题的投票人数（ upvotes + downvotes ）
-  const totalVotes = topics.reduce((sum, t) => sum + t.upvotes + t.downvotes, 0)
+  // 总投票数 = 所有话题的投票人数
+  const totalVotes = topics.reduce((sum, t) => sum + (t.totalVotes || 0), 0)
   // 参与人数 = 评论数 + 投票人数
-  const totalParticipants = topics.length > 0 ? topics.reduce((sum, t) => sum + (t.commentCount || 0) + t.upvotes + t.downvotes, 0) : 0
+  const totalParticipants = topics.length > 0 ? topics.reduce((sum, t) => sum + (t.commentCount || 0) + (t.totalVotes || 0), 0) : 0
 
   return (
     <div>
@@ -549,52 +637,98 @@ export function TrendingTopics() {
                           )}
                         </div>
 
-                        {/* 投票区域 - 右侧显示 */}
+                        {/* 投票区域 - 根据投票类型显示不同UI */}
                         <div className="flex flex-col items-center gap-3 shrink-0 min-w-[140px]">
-                          <span className="text-xs font-medium text-muted-foreground/50">观点投票</span>
-                          {/* 赞同 */}
-                          <div className="flex flex-col items-center">
-                            <button
-                              onClick={() => handleVote(topic.id, "up")}
-                              disabled={!isLoggedIn}
-                              className={`flex h-10 w-24 items-center justify-center rounded-lg border transition-all duration-300 gap-1 ${
-                                currentVote === "up"
-                                  ? "border-primary bg-primary/10 text-primary"
-                                  : "border-border/40 text-muted-foreground/70 hover:border-primary/40 hover:text-primary hover:bg-primary/5"
-                              } ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                              <ChevronUp className="h-4 w-4" />
-                              <span className="text-sm font-medium">赞同</span>
-                            </button>
-                            <span className={`text-lg font-bold font-mono mt-1.5 ${
-                              currentVote === "up" ? "text-primary" : 
-                              "text-foreground"
-                            }`}>
-                              {topic.upvotes}
-                            </span>
-                          </div>
+                          <span className="text-xs font-medium text-muted-foreground/50">
+                            {topic.voteType === 'multiple' ? '请选择' : '观点投票'}
+                          </span>
                           
-                          {/* 否定 */}
-                          <div className="flex flex-col items-center mt-2">
-                            <button
-                              onClick={() => handleVote(topic.id, "down")}
-                              disabled={!isLoggedIn}
-                              className={`flex h-10 w-24 items-center justify-center rounded-lg border transition-all duration-300 gap-1 ${
-                                currentVote === "down"
-                                  ? "border-destructive bg-destructive/10 text-destructive"
-                                  : "border-border/40 text-muted-foreground/70 hover:border-destructive/40 hover:text-destructive hover:bg-destructive/5"
-                              } ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                              <ChevronDown className="h-4 w-4" />
-                              <span className="text-sm font-medium">否定</span>
-                            </button>
-                            <span className={`text-lg font-bold font-mono mt-1.5 ${
-                              currentVote === "down" ? "text-destructive" : 
-                              "text-foreground"
-                            }`}>
-                              {topic.downvotes}
-                            </span>
-                          </div>
+                          {/* Binary类型：赞同/否定 */}
+                          {topic.voteType !== 'multiple' && (
+                            <>
+                              {/* 赞同 */}
+                              <div className="flex flex-col items-center">
+                                <button
+                                  onClick={() => handleVote(topic.id, "up")}
+                                  disabled={!isLoggedIn}
+                                  className={`flex h-10 w-24 items-center justify-center rounded-lg border transition-all duration-300 gap-1 ${
+                                    currentVote === "up"
+                                      ? "border-primary bg-primary/10 text-primary"
+                                      : "border-border/40 text-muted-foreground/70 hover:border-primary/40 hover:text-primary hover:bg-primary/5"
+                                  } ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                  <ChevronUp className="h-4 w-4" />
+                                  <span className="text-sm font-medium">赞同</span>
+                                </button>
+                                <span className={`text-lg font-bold font-mono mt-1.5 ${
+                                  currentVote === "up" ? "text-primary" : 
+                                  "text-foreground"
+                                }`}>
+                                  {topic.upvotes}
+                                </span>
+                              </div>
+                              
+                              {/* 否定 */}
+                              <div className="flex flex-col items-center mt-2">
+                                <button
+                                  onClick={() => handleVote(topic.id, "down")}
+                                  disabled={!isLoggedIn}
+                                  className={`flex h-10 w-24 items-center justify-center rounded-lg border transition-all duration-300 gap-1 ${
+                                    currentVote === "down"
+                                      ? "border-destructive bg-destructive/10 text-destructive"
+                                      : "border-border/40 text-muted-foreground/70 hover:border-destructive/40 hover:text-destructive hover:bg-destructive/5"
+                                  } ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                  <ChevronDown className="h-4 w-4" />
+                                  <span className="text-sm font-medium">否定</span>
+                                </button>
+                                <span className={`text-lg font-bold font-mono mt-1.5 ${
+                                  currentVote === "down" ? "text-destructive" : 
+                                  "text-foreground"
+                                }`}>
+                                  {topic.downvotes}
+                                </span>
+                              </div>
+                            </>
+                          )}
+                          
+                          {/* Multiple类型：多选一选项 */}
+                          {topic.voteType === 'multiple' && topic.options && (
+                            <div className="flex flex-col gap-2 w-full">
+                              {topic.options.map((option) => {
+                                const isSelected = currentVote === option.id
+                                const totalVotes = topic.options?.reduce((sum, o) => sum + (o.votes || 0), 0) || 0
+                                const percentage = totalVotes > 0 ? Math.round((option.votes / totalVotes) * 100) : 0
+                                
+                                return (
+                                  <div key={option.id} className="flex flex-col gap-1">
+                                    <button
+                                      onClick={() => handleMultipleVote(topic.id, option.id)}
+                                      disabled={!isLoggedIn}
+                                      className={`flex items-center justify-between h-9 px-3 rounded-lg border transition-all duration-300 text-xs ${
+                                        isSelected
+                                          ? "border-primary bg-primary/10 text-primary"
+                                          : "border-border/40 text-muted-foreground/70 hover:border-primary/40 hover:text-primary hover:bg-primary/5"
+                                      } ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                      <span className="font-medium truncate">{option.text}</span>
+                                      <span className="font-mono text-[10px]">{percentage}%</span>
+                                    </button>
+                                    {/* 进度条 */}
+                                    <div className="h-1 rounded-full bg-secondary/30 overflow-hidden">
+                                      <div 
+                                        className="h-full rounded-full bg-primary transition-all duration-500"
+                                        style={{ width: `${percentage}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                              <span className="text-[10px] text-muted-foreground/50 text-center mt-1">
+                                {(topic.totalVotes || 0)} 人投票
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

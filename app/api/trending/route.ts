@@ -53,10 +53,13 @@ export async function GET(request: NextRequest) {
           take: 10 // 每个话题只取最新10条评论
         },
         topic_votes: true, // 获取所有投票以计算 upvotes/downvotes
+        topic_options: true, // 获取投票选项（多选一类型）
+        topic_votes_multiple: true, // 获取多选一投票记录
         _count: {
           select: {
             topic_votes: true,
-            topic_comments: true
+            topic_comments: true,
+            topic_votes_multiple: true
           }
         }
       },
@@ -70,6 +73,7 @@ export async function GET(request: NextRequest) {
     // 获取用户投票状态（如果已登录）
     const authHeader = request.headers.get('authorization')
     let userVotes: Record<string, 'up' | 'down'> = {}
+    let userMultipleVotes: Record<string, string> = {} // topicId -> optionId
     let currentUser = null
     
     // 优先从header获取，其次从cookie获取
@@ -90,6 +94,7 @@ export async function GET(request: NextRequest) {
     }
     
     if (currentUser) {
+      // binary类型投票
       const votes = await prisma.topic_votes.findMany({
         where: {
           userId: currentUser.id,
@@ -102,22 +107,54 @@ export async function GET(request: NextRequest) {
       votes.forEach((vote: any) => {
         userVotes[vote.topicId] = vote.direction as 'up' | 'down'
       })
+
+      // 多选一类型投票
+      const multipleVotes = await prisma.topic_votes_multiple.findMany({
+        where: {
+          userId: currentUser.id,
+          topicId: {
+            in: topics.map((t: any) => t.id)
+          }
+        }
+      })
+      
+      multipleVotes.forEach((vote: any) => {
+        userMultipleVotes[vote.topicId] = vote.optionId
+      })
     }
 
     const result = topics.map((topic: any) => {
-      // 计算赞同数和反对数
+      const voteType = topic.voteType || 'binary'
+      
+      // binary类型计算赞同和反对
       const upvotes = topic.topic_votes ? topic.topic_votes.filter((v: any) => v.direction === 'up').length : 0
       const downvotes = topic.topic_votes ? topic.topic_votes.filter((v: any) => v.direction === 'down').length : 0
       
+      // 多选一类型处理选项
+      let options = null
+      if (voteType === 'multiple' && topic.topic_options) {
+        options = topic.topic_options.map((opt: any) => ({
+          id: opt.id,
+          text: opt.text,
+          votes: opt.votes
+        }))
+      }
+      
+      // 计算总投票数
+      const totalVotes = voteType === 'multiple' 
+        ? topic._count.topic_votes_multiple 
+        : upvotes + downvotes
+       
       return {
         id: topic.id,
         title: topic.title,
         description: topic.description,
         category: topic.category,
-        voteType: topic.voteType || 'binary',  // 投票类型: binary(赞同/否定), multiple(多选一)
-        options: topic.options ? JSON.parse(topic.options) : null,  // 投票选项
+        voteType,
+        options,
         upvotes,
         downvotes,
+        totalVotes,
         heat: topic.heat,
         tags: topic.tags ? JSON.parse(topic.tags) : [],
         proposedBy: topic.proposedBy,
@@ -135,7 +172,7 @@ export async function GET(request: NextRequest) {
           })
         })),
         commentCount: topic._count.topic_comments,
-        userVote: userVotes[topic.id] || null
+        userVote: voteType === 'multiple' ? userMultipleVotes[topic.id] || null : userVotes[topic.id] || null
       }
     })
 
@@ -166,7 +203,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { action, topicId, direction, title, description, category, tags } = body
+    const { action, topicId, direction, title, description, category, tags, voteType, optionId, options } = body
 
     // 提议话题
     if (action === 'propose') {
@@ -177,22 +214,34 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
-      // 创建新话题
-      const voteOptions = body.voteType === 'multiple' && body.options
-        ? body.options.split('\n').filter((o: string) => o.trim()).map((o: string, i: number) => ({ id: `opt_${i}`, text: o.trim(), count: 0 }))
-        : null
+      // 创建话题
+      const topicIdNew = `topic_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      
+      // 如果是多选一类型，同时创建选项
+      if (voteType === 'multiple' && options) {
+        const optionTexts = options.split('\n').filter((o: string) => o.trim())
+        for (let i = 0; i < optionTexts.length; i++) {
+          await prisma.topic_options.create({
+            data: {
+              id: `opt_${Date.now()}_${i}`,
+              topicId: topicIdNew,
+              text: optionTexts[i].trim(),
+              votes: 0
+            }
+          })
+        }
+      }
 
       const newTopic = await prisma.trending_topics.create({
         data: {
-          id: `topic_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: topicIdNew,
           title,
           description,
           category: category || '技术选型',
           tags: tags ? JSON.stringify(tags) : null,
           proposedBy: user.name,
           status: 'active', // 新话题直接显示
-          voteType: body.voteType || 'binary',  // 投票类型
-          options: voteOptions ? JSON.stringify(voteOptions) : null,  // 投票选项
+          voteType: voteType || 'binary',  // 投票类型
           votes: 0,
           heat: 1, // 初始热度
           endTime: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24小时后过期
@@ -205,7 +254,137 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // 投票操作
+    // 多选一投票
+    if (voteType === 'multiple') {
+      if (!topicId || !optionId) {
+        return NextResponse.json({ 
+          success: false, 
+          error: '缺少必要参数' 
+        }, { status: 400 })
+      }
+
+      // 检查话题是否存在
+      const topic = await prisma.trending_topics.findUnique({
+        where: { id: topicId }
+      })
+
+      if (!topic) {
+        return NextResponse.json({ 
+          success: false, 
+          error: '话题不存在' 
+        }, { status: 404 })
+      }
+
+      // 检查选项是否存在
+      const option = await prisma.topic_options.findUnique({
+        where: { id: optionId }
+      })
+
+      if (!option || option.topicId !== topicId) {
+        return NextResponse.json({ 
+          success: false, 
+          error: '选项不存在' 
+        }, { status: 404 })
+      }
+
+      // 检查是否已经投过票
+      const existingVote = await prisma.topic_votes_multiple.findUnique({
+        where: {
+          topicId_userId: {
+            topicId,
+            userId: user.id
+          }
+        }
+      })
+
+      if (existingVote) {
+        if (existingVote.optionId === optionId) {
+          // 取消投票
+          await prisma.topic_votes_multiple.delete({
+            where: { id: existingVote.id }
+          })
+          
+          // 更新选项票数
+          await prisma.topic_options.update({
+            where: { id: optionId },
+            data: { votes: { decrement: 1 } }
+          })
+          
+          // 更新热度
+          await prisma.trending_topics.update({
+            where: { id: topicId },
+            data: { heat: { decrement: 2 } }
+          })
+        } else {
+          // 切换投票
+          const oldOptionId = existingVote.optionId
+          
+          await prisma.topic_votes_multiple.update({
+            where: { id: existingVote.id },
+            data: { optionId }
+          })
+          
+          // 旧选项票数-1
+          await prisma.topic_options.update({
+            where: { id: oldOptionId },
+            data: { votes: { decrement: 1 } }
+          })
+          
+          // 新选项票数+1
+          await prisma.topic_options.update({
+            where: { id: optionId },
+            data: { votes: { increment: 1 } }
+          })
+          
+          // 更新热度
+          await prisma.trending_topics.update({
+            where: { id: topicId },
+            data: { heat: { increment: 2 } }
+          })
+        }
+      } else {
+        // 第一次投票
+        await prisma.topic_votes_multiple.create({
+          data: {
+            id: `vote_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            topicId,
+            optionId,
+            userId: user.id
+          }
+        })
+        
+        // 更新选项票数
+        await prisma.topic_options.update({
+          where: { id: optionId },
+          data: { votes: { increment: 1 } }
+        })
+        
+        // 更新热度
+        await prisma.trending_topics.update({
+          where: { id: topicId },
+          data: { heat: { increment: 2 } }
+        })
+      }
+
+      // 获取更新后的投票状态
+      const updatedVote = await prisma.topic_votes_multiple.findUnique({
+        where: {
+          topicId_userId: {
+            topicId,
+            userId: user.id
+          }
+        }
+      })
+
+      return NextResponse.json({ 
+        success: true, 
+        data: {
+          userVote: updatedVote ? updatedVote.optionId : null
+        }
+      })
+    }
+
+    // Binary类型投票（赞同/反对）
     if (!topicId || !direction) {
       return NextResponse.json({ 
         success: false, 

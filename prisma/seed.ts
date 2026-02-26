@@ -678,6 +678,7 @@ Rust 学习曲线陡峭，但值得投入。`,
         title: 'Rust 能否取代 C 成为内核开发的主力语言？',
         description: '随着 Rust for Linux 项目的推进，越来越多的内核模块开始用 Rust 编写。你认为 Rust 最终能取代 C 在内核开发中的地位吗？',
         category: '语言之争',
+        voteType: 'binary',
         votes: 247,
         heat: 98,
         tags: JSON.stringify(['Rust', 'C', 'Linux 内核']),
@@ -692,6 +693,7 @@ Rust 学习曲线陡峭，但值得投入。`,
         title: 'io_uring vs epoll：下一代 I/O 多路复用的选择',
         description: 'io_uring 提供了更统一和高效的异步 I/O 接口，但 epoll 更成熟稳定。在新项目中你会选择哪个？',
         category: '技术选型',
+        voteType: 'binary',
         votes: 183,
         heat: 85,
         tags: JSON.stringify(['io_uring', 'epoll', 'Linux']),
@@ -703,9 +705,25 @@ Rust 学习曲线陡峭，但值得投入。`,
     prisma.trending_topics.create({
       data: {
         id: `topic_${Date.now()}_3`,
+        title: '你更看好哪个 AI 编程辅助工具？',
+        description: '现在市面上有很多 AI 编程辅助工具，你最常用哪一个？',
+        category: '技术选型',
+        voteType: 'multiple',
+        votes: 0,
+        heat: 95,
+        tags: JSON.stringify(['AI', '编程助手', '工具']),
+        proposedBy: users[1].name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    }),
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_4`,
         title: 'eBPF 是否是可观测性的终极解决方案？',
         description: 'eBPF 允许在内核中安全运行自定义程序，正在革新系统监控和安全领域。你怎么看它的未来？',
         category: '前沿技术',
+        voteType: 'binary',
         votes: 156,
         heat: 79,
         tags: JSON.stringify(['eBPF', '可观测性', '安全']),
@@ -716,10 +734,26 @@ Rust 学习曲线陡峭，但值得投入。`,
     }),
     prisma.trending_topics.create({
       data: {
-        id: `topic_${Date.now()}_4`,
+        id: `topic_${Date.now()}_5`,
+        title: '你最喜欢的后端开发语言是哪个？',
+        description: '请选择你最常用或最喜欢的后端开发语言',
+        category: '语言之争',
+        voteType: 'multiple',
+        votes: 0,
+        heat: 88,
+        tags: JSON.stringify(['后端', '编程语言', '开发']),
+        proposedBy: users[2].name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    }),
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_6`,
         title: 'RISC-V 会成为下一个 ARM 吗？',
         description: 'RISC-V 的开放指令集架构正在快速发展。从嵌入式到服务器，RISC-V 能在多大程度上挑战 ARM 和 x86 的地位？',
         category: '硬件架构',
+        voteType: 'binary',
         votes: 134,
         heat: 72,
         tags: JSON.stringify(['RISC-V', 'ARM', 'ISA']),
@@ -730,10 +764,26 @@ Rust 学习曲线陡峭，但值得投入。`,
     }),
     prisma.trending_topics.create({
       data: {
-        id: `topic_${Date.now()}_5`,
+        id: `topic_${Date.now()}_7`,
+        title: '你使用哪个云平台部署服务？',
+        description: '请选择你最常用的云服务平台',
+        category: '技术选型',
+        voteType: 'multiple',
+        votes: 0,
+        heat: 75,
+        tags: JSON.stringify(['云', '部署', 'DevOps']),
+        proposedBy: users[3].name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    }),
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_8`,
         title: 'WebAssembly 能否成为服务端的通用运行时？',
         description: 'WASI 和 Component Model 正在让 Wasm 超越浏览器。作为服务端沙箱运行时，它能取代容器吗？',
         category: '新方向',
+        voteType: 'binary',
         votes: 98,
         heat: 61,
         tags: JSON.stringify(['Wasm', 'WASI', '云原生']),
@@ -745,6 +795,43 @@ Rust 学习曲线陡峭，但值得投入。`,
   ])
 
   console.log('✅ 创建热榜话题:', topics.length, '个')
+
+  // 为多选一类型话题创建投票选项
+  const multipleTopics = topics.filter((t: any) => t.voteType === 'multiple')
+  
+  for (const topic of multipleTopics) {
+    if (topic.title.includes('AI 编程')) {
+      await prisma.topic_options.createMany({
+        data: [
+          { id: `opt_${topic.id}_1`, topicId: topic.id, text: 'GitHub Copilot', votes: 45 },
+          { id: `opt_${topic.id}_2`, topicId: topic.id, text: 'Cursor', votes: 38 },
+          { id: `opt_${topic.id}_3`, topicId: topic.id, text: '通义灵码', votes: 22 },
+          { id: `opt_${topic.id}_4`, topicId: topic.id, text: 'Codeium', votes: 15 },
+        ],
+      })
+    } else if (topic.title.includes('后端开发语言')) {
+      await prisma.topic_options.createMany({
+        data: [
+          { id: `opt_${topic.id}_1`, topicId: topic.id, text: 'Go', votes: 56 },
+          { id: `opt_${topic.id}_2`, topicId: topic.id, text: 'Python', votes: 42 },
+          { id: `opt_${topic.id}_3`, topicId: topic.id, text: 'Node.js', votes: 35 },
+          { id: `opt_${topic.id}_4`, topicId: topic.id, text: 'Rust', votes: 28 },
+          { id: `opt_${topic.id}_5`, topicId: topic.id, text: 'Java', votes: 18 },
+        ],
+      })
+    } else if (topic.title.includes('云平台')) {
+      await prisma.topic_options.createMany({
+        data: [
+          { id: `opt_${topic.id}_1`, topicId: topic.id, text: '阿里云', votes: 48 },
+          { id: `opt_${topic.id}_2`, topicId: topic.id, text: '腾讯云', votes: 32 },
+          { id: `opt_${topic.id}_3`, topicId: topic.id, text: 'AWS', votes: 25 },
+          { id: `opt_${topic.id}_4`, topicId: topic.id, text: 'Vercel', votes: 18 },
+        ],
+      })
+    }
+  }
+
+  console.log('✅ 创建多选一投票选项')
 
   // 为热榜话题创建评论
   await prisma.topic_comments.createMany({

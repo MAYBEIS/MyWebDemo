@@ -131,6 +131,7 @@ model users {
   user_coupons    user_coupons[]
   topic_comments topic_comments[]
   topic_votes    topic_votes[]
+  topic_votes_multiple topic_votes_multiple[]
 
   @@index([isBanned])
 }
@@ -329,6 +330,8 @@ model trending_topics {
   updatedAt   DateTime @updatedAt
   topic_comments topic_comments[]
   topic_votes topic_votes[]
+  topic_options topic_options[]
+  topic_votes_multiple topic_votes_multiple[]
 
   @@index([category])
   @@index([status])
@@ -361,7 +364,37 @@ model topic_votes {
   trending_topics trending_topics @relation(fields: [topicId], references: [id], onDelete: Cascade)
   users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([topicId, userId])  // 同一用户对同一话题只能投一票（binary类型）
+  @@index([topicId])
+  @@index([userId])
+}
+
+// 投票选项（用于多选一投票）
+model topic_options {
+  id        String   @id
+  topicId   String
+  text      String   // 选项文本
+  votes     Int      @default(0)  // 投票数
+  createdAt DateTime @default(now())
+  topic_votes_multiple topic_votes_multiple[]
+  trending_topics trending_topics @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@index([topicId])
+}
+
+// 多选一投票记录
+model topic_votes_multiple {
+  id        String   @id
+  topicId   String
+  optionId  String
+  userId    String
+  createdAt DateTime @default(now())
+  topic_options topic_options @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  trending_topics trending_topics @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([topicId, userId])  // 同一用户对同一话题只能投一票
   @@index([topicId])
   @@index([userId])
+  @@index([optionId])
 }
