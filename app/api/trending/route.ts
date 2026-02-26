@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
           },
           take: 10 // 每个话题只取最新10条评论
         },
+        topic_votes: true, // 获取所有投票以计算 upvotes/downvotes
         _count: {
           select: {
             topic_votes: true,
@@ -92,12 +93,17 @@ export async function GET(request: NextRequest) {
     }
 
     const result = topics.map((topic: any) => {
+      // 计算赞同数和反对数
+      const upvotes = topic.topic_votes ? topic.topic_votes.filter((v: any) => v.direction === 'up').length : 0
+      const downvotes = topic.topic_votes ? topic.topic_votes.filter((v: any) => v.direction === 'down').length : 0
+      
       return {
         id: topic.id,
         title: topic.title,
         description: topic.description,
         category: topic.category,
-        votes: topic.votes,
+        upvotes,
+        downvotes,
         heat: topic.heat,
         tags: topic.tags ? JSON.parse(topic.tags) : [],
         proposedBy: topic.proposedBy,
@@ -259,6 +265,7 @@ export async function POST(request: NextRequest) {
       // 第一次投票
       await prisma.topic_votes.create({
         data: {
+          id: `vote_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           topicId,
           userId: user.id,
           direction

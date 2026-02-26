@@ -68,7 +68,8 @@ interface Topic {
   title: string
   description: string
   category: string
-  votes: number
+  upvotes: number
+  downvotes: number
   heat: number
   comments: TopicComment[]
   commentCount: number
@@ -188,7 +189,8 @@ export function TrendingTopics() {
 
   const sortedTopics = useMemo(() => {
     return [...topics].sort((a, b) => {
-      if (sortBy === "votes") return b.votes - a.votes
+      // 按赞同数排序
+      if (sortBy === "votes") return b.upvotes - a.upvotes
       if (sortBy === "heat") return b.heat - a.heat
       return (b.commentCount || b.comments.length) - (a.commentCount || a.comments.length)
     })
@@ -227,7 +229,16 @@ export function TrendingTopics() {
     // 更新本地状态
     setTopics(topics.map((t) =>
       t.id === id 
-        ? { ...t, votes: t.votes + voteChange, heat: Math.max(0, Math.min(100, t.heat + heatChange)) } 
+        ? { 
+            ...t, 
+            upvotes: direction === "up" 
+              ? (currentVote === "up" ? t.upvotes - 1 : currentVote === "down" ? t.upvotes + 1 : t.upvotes + 1)
+              : (currentVote === "up" ? t.upvotes - 1 : t.upvotes),
+            downvotes: direction === "down"
+              ? (currentVote === "down" ? t.downvotes - 1 : currentVote === "up" ? t.downvotes + 1 : t.downvotes + 1)
+              : (currentVote === "down" ? t.downvotes - 1 : t.downvotes),
+            heat: Math.max(0, Math.min(100, t.heat + heatChange))
+          } 
         : t
     ))
     
@@ -323,8 +334,10 @@ export function TrendingTopics() {
     }
   }
 
-  const totalVotes = topics.reduce((sum, t) => sum + t.votes, 0)
-  const totalParticipants = topics.length > 0 ? topics.reduce((sum, t) => sum + (t.commentCount || 0) + Math.abs(t.votes), 0) : 0
+  // 总投票数 = 所有话题的投票人数（ upvotes + downvotes ）
+  const totalVotes = topics.reduce((sum, t) => sum + t.upvotes + t.downvotes, 0)
+  // 参与人数 = 评论数 + 投票人数
+  const totalParticipants = topics.length > 0 ? topics.reduce((sum, t) => sum + (t.commentCount || 0) + t.upvotes + t.downvotes, 0) : 0
 
   return (
     <div>
@@ -424,37 +437,49 @@ export function TrendingTopics() {
               >
                 <div className="p-6">
                   <div className="flex gap-4">
-                    {/* Vote column */}
-                    <div className="flex flex-col items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => handleVote(topic.id, "up")}
-                        disabled={!isLoggedIn}
-                        className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-all duration-300 ${
-                          currentVote === "up"
-                            ? "border-primary/50 bg-primary/20 text-primary"
-                            : "border-border/40 text-muted-foreground/40 hover:border-primary/20 hover:text-primary"
-                        } ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        <ChevronUp className="h-4 w-4" />
-                      </button>
-                      <span className={`text-sm font-bold font-mono ${
-                        currentVote === "up" ? "text-primary" : 
-                        currentVote === "down" ? "text-destructive" : 
-                        "text-foreground"
-                      }`}>
-                        {topic.votes}
-                      </span>
-                      <button
-                        onClick={() => handleVote(topic.id, "down")}
-                        disabled={!isLoggedIn}
-                        className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-all duration-300 ${
-                          currentVote === "down"
-                            ? "border-destructive/50 bg-destructive/20 text-destructive"
-                            : "border-border/30 text-muted-foreground/40 hover:border-destructive/20 hover:text-destructive"
-                        } ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                      </button>
+                    {/* Vote column - 左右布局 */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* 赞同按钮和数量 */}
+                      <div className="flex flex-col items-center">
+                        <button
+                          onClick={() => handleVote(topic.id, "up")}
+                          disabled={!isLoggedIn}
+                          className={`flex h-8 w-10 items-center justify-center rounded-lg border transition-all duration-300 ${
+                            currentVote === "up"
+                              ? "border-primary/50 bg-primary/20 text-primary"
+                              : "border-border/40 text-muted-foreground/40 hover:border-primary/20 hover:text-primary"
+                          } ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </button>
+                        <span className={`text-sm font-bold font-mono mt-1 ${
+                          currentVote === "up" ? "text-primary" : 
+                          "text-foreground"
+                        }`}>
+                          {topic.upvotes}
+                        </span>
+                      </div>
+                      
+                      {/* 否定按钮和数量 */}
+                      <div className="flex flex-col items-center">
+                        <button
+                          onClick={() => handleVote(topic.id, "down")}
+                          disabled={!isLoggedIn}
+                          className={`flex h-8 w-10 items-center justify-center rounded-lg border transition-all duration-300 ${
+                            currentVote === "down"
+                              ? "border-destructive/50 bg-destructive/20 text-destructive"
+                              : "border-border/30 text-muted-foreground/40 hover:border-destructive/20 hover:text-destructive"
+                          } ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                        <span className={`text-sm font-bold font-mono mt-1 ${
+                          currentVote === "down" ? "text-destructive" : 
+                          "text-foreground"
+                        }`}>
+                          {topic.downvotes}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Content */}
