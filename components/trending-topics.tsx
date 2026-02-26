@@ -163,7 +163,9 @@ export function TrendingTopics() {
     const fetchTopics = async () => {
       setLoading(true)
       try {
-        const response = await fetch(`/api/trending?sortBy=${sortBy}`)
+        const response = await fetch(`/api/trending?sortBy=${sortBy}`, {
+          credentials: 'include',  // 包含cookie以获取用户投票状态
+        })
         const data = await response.json()
         if (data.success && data.data) {
           setTopics(data.data)
@@ -557,8 +559,8 @@ export function TrendingTopics() {
                               disabled={!isLoggedIn}
                               className={`flex h-10 w-24 items-center justify-center rounded-lg border transition-all duration-300 gap-1 ${
                                 currentVote === "up"
-                                  ? "border-primary/50 bg-primary/20 text-primary"
-                                  : "border-border/40 text-muted-foreground/60 hover:border-primary/30 hover:text-primary hover:bg-primary/5"
+                                  ? "border-primary bg-primary/10 text-primary"
+                                  : "border-border/40 text-muted-foreground/70 hover:border-primary/40 hover:text-primary hover:bg-primary/5"
                               } ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                               <ChevronUp className="h-4 w-4" />
@@ -579,8 +581,8 @@ export function TrendingTopics() {
                               disabled={!isLoggedIn}
                               className={`flex h-10 w-24 items-center justify-center rounded-lg border transition-all duration-300 gap-1 ${
                                 currentVote === "down"
-                                  ? "border-destructive/50 bg-destructive/20 text-destructive"
-                                  : "border-border/40 text-muted-foreground/60 hover:border-destructive/30 hover:text-destructive hover:bg-destructive/5"
+                                  ? "border-destructive bg-destructive/10 text-destructive"
+                                  : "border-border/40 text-muted-foreground/70 hover:border-destructive/40 hover:text-destructive hover:bg-destructive/5"
                               } ${!isLoggedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                               <ChevronDown className="h-4 w-4" />

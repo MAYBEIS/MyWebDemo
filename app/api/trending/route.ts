@@ -72,9 +72,21 @@ export async function GET(request: NextRequest) {
     let userVotes: Record<string, 'up' | 'down'> = {}
     let currentUser = null
     
+    // 优先从header获取，其次从cookie获取
     if (authHeader) {
       const token = authHeader.replace('Bearer ', '')
       currentUser = await verifyToken(token)
+    }
+    
+    // 如果header没有，尝试从cookie获取
+    if (!currentUser) {
+      const cookieHeader = request.headers.get('cookie')
+      if (cookieHeader) {
+        const tokenMatch = cookieHeader.match(/auth_token=([^;]+)/)
+        if (tokenMatch) {
+          currentUser = await verifyToken(tokenMatch[1])
+        }
+      }
     }
     
     if (currentUser) {
