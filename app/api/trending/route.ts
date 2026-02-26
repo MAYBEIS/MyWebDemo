@@ -133,10 +133,17 @@ export async function GET(request: NextRequest) {
       // 多选一类型处理选项
       let options = null
       if (voteType === 'multiple' && topic.topic_options) {
+        // 从 topic_votes_multiple 表统计每个选项的实际投票数
+        const optionVotes: Record<string, number> = {}
+        if (topic.topic_votes_multiple) {
+          topic.topic_votes_multiple.forEach((v: any) => {
+            optionVotes[v.optionId] = (optionVotes[v.optionId] || 0) + 1
+          })
+        }
         options = topic.topic_options.map((opt: any) => ({
           id: opt.id,
           text: opt.text,
-          votes: opt.votes
+          votes: optionVotes[opt.id] || 0
         }))
       }
       

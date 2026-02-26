@@ -833,6 +833,68 @@ Rust 学习曲线陡峭，但值得投入。`,
 
   console.log('✅ 创建多选一投票选项')
 
+  // 为多选一话题创建投票记录（模拟已有投票）
+  const aiTopic = topics.find((t: any) => t.title.includes('AI 编程'))
+  const backendTopic = topics.find((t: any) => t.title.includes('后端开发语言'))
+  const cloudTopic = topics.find((t: any) => t.title.includes('云平台'))
+
+  if (aiTopic) {
+    const aiOptions = await prisma.topic_options.findMany({
+      where: { topicId: aiTopic.id }
+    })
+    // 模拟投票分布
+    await prisma.topic_votes_multiple.createMany({
+      data: [
+        { id: `vote_m_${Date.now()}_ai_1`, topicId: aiTopic.id, optionId: aiOptions[0]?.id, userId: users[0].id },
+        { id: `vote_m_${Date.now()}_ai_2`, topicId: aiTopic.id, optionId: aiOptions[0]?.id, userId: users[1].id },
+        { id: `vote_m_${Date.now()}_ai_3`, topicId: aiTopic.id, optionId: aiOptions[0]?.id, userId: users[2].id },
+        { id: `vote_m_${Date.now()}_ai_4`, topicId: aiTopic.id, optionId: aiOptions[1]?.id, userId: users[3].id },
+        { id: `vote_m_${Date.now()}_ai_5`, topicId: aiTopic.id, optionId: aiOptions[1]?.id, userId: users[4].id },
+        { id: `vote_m_${Date.now()}_ai_6`, topicId: aiTopic.id, optionId: aiOptions[1]?.id, userId: admin.id },
+        { id: `vote_m_${Date.now()}_ai_7`, topicId: aiTopic.id, optionId: aiOptions[2]?.id, userId: users[0].id },
+        { id: `vote_m_${Date.now()}_ai_8`, topicId: aiTopic.id, optionId: aiOptions[2]?.id, userId: users[1].id },
+      ].filter(v => v.optionId)
+    })
+  }
+
+  if (backendTopic) {
+    const backendOptions = await prisma.topic_options.findMany({
+      where: { topicId: backendTopic.id }
+    })
+    await prisma.topic_votes_multiple.createMany({
+      data: [
+        { id: `vote_m_${Date.now()}_be_1`, topicId: backendTopic.id, optionId: backendOptions[0]?.id, userId: users[0].id },
+        { id: `vote_m_${Date.now()}_be_2`, topicId: backendTopic.id, optionId: backendOptions[0]?.id, userId: users[1].id },
+        { id: `vote_m_${Date.now()}_be_3`, topicId: backendTopic.id, optionId: backendOptions[0]?.id, userId: users[2].id },
+        { id: `vote_m_${Date.now()}_be_4`, topicId: backendTopic.id, optionId: backendOptions[0]?.id, userId: users[3].id },
+        { id: `vote_m_${Date.now()}_be_5`, topicId: backendTopic.id, optionId: backendOptions[1]?.id, userId: users[4].id },
+        { id: `vote_m_${Date.now()}_be_6`, topicId: backendTopic.id, optionId: backendOptions[1]?.id, userId: admin.id },
+        { id: `vote_m_${Date.now()}_be_7`, topicId: backendTopic.id, optionId: backendOptions[2]?.id, userId: users[0].id },
+        { id: `vote_m_${Date.now()}_be_8`, topicId: backendTopic.id, optionId: backendOptions[2]?.id, userId: users[1].id },
+        { id: `vote_m_${Date.now()}_be_9`, topicId: backendTopic.id, optionId: backendOptions[3]?.id, userId: users[2].id },
+      ].filter(v => v.optionId)
+    })
+  }
+
+  if (cloudTopic) {
+    const cloudOptions = await prisma.topic_options.findMany({
+      where: { topicId: cloudTopic.id }
+    })
+    await prisma.topic_votes_multiple.createMany({
+      data: [
+        { id: `vote_m_${Date.now()}_cl_1`, topicId: cloudTopic.id, optionId: cloudOptions[0]?.id, userId: users[0].id },
+        { id: `vote_m_${Date.now()}_cl_2`, topicId: cloudTopic.id, optionId: cloudOptions[0]?.id, userId: users[1].id },
+        { id: `vote_m_${Date.now()}_cl_3`, topicId: cloudTopic.id, optionId: cloudOptions[0]?.id, userId: users[2].id },
+        { id: `vote_m_${Date.now()}_cl_4`, topicId: cloudTopic.id, optionId: cloudOptions[1]?.id, userId: users[3].id },
+        { id: `vote_m_${Date.now()}_cl_5`, topicId: cloudTopic.id, optionId: cloudOptions[1]?.id, userId: users[4].id },
+        { id: `vote_m_${Date.now()}_cl_6`, topicId: cloudTopic.id, optionId: cloudOptions[2]?.id, userId: admin.id },
+        { id: `vote_m_${Date.now()}_cl_7`, topicId: cloudTopic.id, optionId: cloudOptions[3]?.id, userId: users[0].id },
+      ].filter(v => v.optionId)
+    })
+  }
+
+  console.log('✅ 创建多选一投票记录')
+
   // 为热榜话题创建评论
   await prisma.topic_comments.createMany({
     data: [

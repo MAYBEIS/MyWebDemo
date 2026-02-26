@@ -148,6 +148,27 @@ export function TrendingTopics() {
   const [newCommentText, setNewCommentText] = useState("")
   const [sortBy, setSortBy] = useState<"votes" | "heat" | "comments">("votes")
   const { user, isLoggedIn } = useAuth()
+// 用于追踪最近显示的toast，避免重复
+  const [lastToastTime, setLastToastTime] = useState<Map<string, number>>(new Map())
+  
+  // 防抖显示toast，避免重复触发
+  const showToast = (key: string, message: string, type: 'error' | 'success' = 'error') => {
+    const now = Date.now()
+    const lastTime = lastToastTime.get(key) || 0
+    
+    // 2秒内不重复显示相同的toast
+    if (now - lastTime < 2000) {
+      return
+    }
+    
+    setLastToastTime(new Map(lastToastTime).set(key, now))
+    
+    if (type === 'error') {
+      toast.error(message)
+    } else {
+      toast.success(message)
+    }
+  }
   
   // 提议话题对话框状态
   const [proposeDialogOpen, setProposeDialogOpen] = useState(false)
@@ -201,7 +222,7 @@ export function TrendingTopics() {
 
   const handleVote = async (id: string, direction: "up" | "down") => {
     if (!isLoggedIn) {
-      toast.error("请先登录后再投票")
+      showToast("vote_login", "请先登录后再投票")
       return
     }
     
@@ -256,7 +277,7 @@ export function TrendingTopics() {
       const data = await response.json()
       if (!data.success) {
         // 如果API失败，回滚状态
-        toast.error(data.error || '投票失败')
+        showToast('vote_fail', data.error || '投票失败')
         // 重新获取数据
         const fetchResponse = await fetch(`/api/trending?sortBy=${sortBy}`)
         const fetchData = await fetchResponse.json()
@@ -266,14 +287,14 @@ export function TrendingTopics() {
       }
     } catch (error) {
       console.error('投票失败:', error)
-      toast.error('投票失败，请稍后重试')
+      showToast('multi_vote_error', '投票失败，请稍后重试')
     }
   }
 
   // 多选一投票处理
   const handleMultipleVote = async (topicId: string, optionId: string) => {
     if (!isLoggedIn) {
-      toast.error("请先登录后再投票")
+      showToast("multi_vote_login", "请先登录后再投票")
       return
     }
     
@@ -339,7 +360,7 @@ export function TrendingTopics() {
       })
       const data = await response.json()
       if (!data.success) {
-        toast.error(data.error || '投票失败')
+        showToast('multi_vote_api_fail', data.error || '投票失败')
         // 重新获取数据
         const fetchResponse = await fetch(`/api/trending?sortBy=${sortBy}`, { credentials: 'include' })
         const fetchData = await fetchResponse.json()
@@ -349,13 +370,13 @@ export function TrendingTopics() {
       }
     } catch (error) {
       console.error('投票失败:', error)
-      toast.error('投票失败，请稍后重试')
+      showToast('vote_error', '投票失败，请稍后重试')
     }
   }
 
   const handleComment = (topicId: string) => {
     if (!isLoggedIn || !user) {
-      toast.error("请先登录后再评论")
+      showToast('comment_login', "请先登录后再评论")
       return
     }
     if (!newCommentText.trim()) return
@@ -372,21 +393,21 @@ export function TrendingTopics() {
         : t
     ))
     setNewCommentText("")
-    toast.success("评论成功！")
+    showToast('comment_success', "评论成功！", 'success')
   }
 
   // 提议话题
   const handleProposeTopic = async () => {
     if (!isLoggedIn) {
-      toast.error("请先登录后再提议话题")
+      showToast('propose_login', "请先登录后再提议话题")
       return
     }
     if (!proposeForm.title.trim()) {
-      toast.error("请输入话题标题")
+      showToast('propose_title', "请输入话题标题")
       return
     }
     if (!proposeForm.description.trim()) {
-      toast.error("请输入话题描述")
+      showToast('propose_desc', "请输入话题描述")
       return
     }
     
@@ -408,15 +429,15 @@ export function TrendingTopics() {
       })
       const data = await response.json()
       if (data.success) {
-        toast.success("话题提议成功，等待审核")
+        showToast('propose_success', "话题提议成功，等待审核", 'success')
         setProposeDialogOpen(false)
         setProposeForm({ title: "", description: "", category: "技术选型", tags: "", voteType: "binary", options: "" })
       } else {
-        toast.error(data.error || "提议话题失败")
+        showToast('propose_fail', data.error || "提议话题失败")
       }
     } catch (error) {
       console.error('提议话题失败:', error)
-      toast.error('提议话题失败，请稍后重试')
+      showToast('propose_error', '提议话题失败，请稍后重试')
     } finally {
       setProposing(false)
     }
@@ -630,7 +651,7 @@ export function TrendingTopics() {
                             </div>
                           ) : (
                             <div className="text-center py-3">
-                              <Button size="sm" variant="outline" className="border-border/40 text-sm gap-1.5" onClick={() => toast.error("请先登录后参与讨论")}>
+                              <Button size="sm" variant="outline" className="border-border/40 text-sm gap-1.5" onClick={() => showToast('comment_login', "请先登录后参与讨论")}>
                                 登录后参与讨论
                               </Button>
                             </div>
@@ -753,7 +774,7 @@ export function TrendingTopics() {
           className="border-border/40 hover:border-primary/30 hover:bg-primary/5 gap-1.5"
           onClick={() => {
             if (!isLoggedIn) {
-              toast.error("请先登录后再提议话题")
+              showToast('propose_login', "请先登录后再提议话题")
               return
             }
             setProposeDialogOpen(true)
