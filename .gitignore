@@ -49,3 +49,4 @@ coverage/
 .specify
 .del
 .claude
+.import

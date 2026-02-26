@@ -670,6 +670,139 @@ Rust 学习曲线陡峭，但值得投入。`,
 
   console.log('✅ 创建示例留言')
 
+  // 创建热榜话题
+  const topics = await Promise.all([
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_1`,
+        title: 'Rust 能否取代 C 成为内核开发的主力语言？',
+        description: '随着 Rust for Linux 项目的推进，越来越多的内核模块开始用 Rust 编写。你认为 Rust 最终能取代 C 在内核开发中的地位吗？',
+        category: '语言之争',
+        votes: 247,
+        heat: 98,
+        tags: JSON.stringify(['Rust', 'C', 'Linux 内核']),
+        proposedBy: admin.name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24小时后过期
+      },
+    }),
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_2`,
+        title: 'io_uring vs epoll：下一代 I/O 多路复用的选择',
+        description: 'io_uring 提供了更统一和高效的异步 I/O 接口，但 epoll 更成熟稳定。在新项目中你会选择哪个？',
+        category: '技术选型',
+        votes: 183,
+        heat: 85,
+        tags: JSON.stringify(['io_uring', 'epoll', 'Linux']),
+        proposedBy: users[0].name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    }),
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_3`,
+        title: 'eBPF 是否是可观测性的终极解决方案？',
+        description: 'eBPF 允许在内核中安全运行自定义程序，正在革新系统监控和安全领域。你怎么看它的未来？',
+        category: '前沿技术',
+        votes: 156,
+        heat: 79,
+        tags: JSON.stringify(['eBPF', '可观测性', '安全']),
+        proposedBy: users[1].name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    }),
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_4`,
+        title: 'RISC-V 会成为下一个 ARM 吗？',
+        description: 'RISC-V 的开放指令集架构正在快速发展。从嵌入式到服务器，RISC-V 能在多大程度上挑战 ARM 和 x86 的地位？',
+        category: '硬件架构',
+        votes: 134,
+        heat: 72,
+        tags: JSON.stringify(['RISC-V', 'ARM', 'ISA']),
+        proposedBy: users[2].name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    }),
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_5`,
+        title: 'WebAssembly 能否成为服务端的通用运行时？',
+        description: 'WASI 和 Component Model 正在让 Wasm 超越浏览器。作为服务端沙箱运行时，它能取代容器吗？',
+        category: '新方向',
+        votes: 98,
+        heat: 61,
+        tags: JSON.stringify(['Wasm', 'WASI', '云原生']),
+        proposedBy: users[3].name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    }),
+  ])
+
+  console.log('✅ 创建热榜话题:', topics.length, '个')
+
+  // 为热榜话题创建评论
+  await prisma.topic_comments.createMany({
+    data: [
+      {
+        id: `topic_comment_${Date.now()}_1`,
+        topicId: topics[0].id,
+        userId: users[0].id,
+        content: 'C 在内核中的生态太成熟了，短期内不可能替代，但 Rust 作为补充非常合适。',
+      },
+      {
+        id: `topic_comment_${Date.now()}_2`,
+        topicId: topics[0].id,
+        userId: users[1].id,
+        content: '所有权模型天然适合内核开发，Use-after-free 这种 bug 直接在编译期消除。',
+      },
+      {
+        id: `topic_comment_${Date.now()}_3`,
+        topicId: topics[0].id,
+        userId: admin.id,
+        content: '我认为两者会长期共存。新模块用 Rust 写是趋势，但重写已有代码不现实。',
+      },
+      {
+        id: `topic_comment_${Date.now()}_4`,
+        topicId: topics[1].id,
+        userId: users[2].id,
+        content: 'io_uring 在高并发场景下吞吐量提升 30%+，没有理由不用。',
+      },
+      {
+        id: `topic_comment_${Date.now()}_5`,
+        topicId: topics[1].id,
+        userId: users[3].id,
+        content: 'epoll 经过二十年实战验证，io_uring 的安全问题值得警惕。',
+      },
+      {
+        id: `topic_comment_${Date.now()}_6`,
+        topicId: topics[2].id,
+        userId: users[0].id,
+        content: 'eBPF 不只是可观测性，它在安全、网络方面的应用同样革命性。',
+      },
+    ],
+  })
+
+  console.log('✅ 创建热榜评论')
+
+  // 为热榜话题创建投票记录
+  await prisma.topic_votes.createMany({
+    data: [
+      { id: `topic_vote_${Date.now()}_1`, topicId: topics[0].id, userId: users[0].id, direction: 'up' },
+      { id: `topic_vote_${Date.now()}_2`, topicId: topics[0].id, userId: users[1].id, direction: 'up' },
+      { id: `topic_vote_${Date.now()}_3`, topicId: topics[0].id, userId: users[2].id, direction: 'down' },
+      { id: `topic_vote_${Date.now()}_4`, topicId: topics[1].id, userId: users[0].id, direction: 'up' },
+      { id: `topic_vote_${Date.now()}_5`, topicId: topics[2].id, userId: admin.id, direction: 'up' },
+    ],
+  })
+
+  console.log('✅ 创建热榜投票记录')
+
   console.log('🎉 数据库播种完成！')
   console.log('')
   console.log('📝 测试账号信息:')

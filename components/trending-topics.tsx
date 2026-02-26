@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   Flame,
   TrendingUp,
@@ -36,114 +36,128 @@ function getAvatarInitials(name: string, avatar: string | null): string {
 }
 
 interface TopicComment {
-  id: number
+  id: string
   author: string
-  avatar: string
+  avatar?: string
   content: string
   time: string
 }
 
 interface Topic {
-  id: number
+  id: string
   title: string
   description: string
   category: string
   votes: number
   heat: number
   comments: TopicComment[]
+  commentCount: number
   tags: string[]
   proposedBy: string
   timeLeft: string
+  userVote: 'up' | 'down' | null
 }
 
 const today = new Date().toLocaleDateString("zh-CN", { month: "long", day: "numeric" })
 
 const initialTopics: Topic[] = [
   {
-    id: 1,
+    id: "1",
     title: "Rust 能否取代 C 成为内核开发的主力语言？",
     description: "随着 Rust for Linux 项目的推进，越来越多的内核模块开始用 Rust 编写。你认为 Rust 最终能取代 C 在内核开发中的地位吗？",
     category: "语言之争",
     votes: 247,
     heat: 98,
+    commentCount: 3,
     comments: [
-      { id: 101, author: "kernel_dev", avatar: "KD", content: "C 在内核中的生态太成熟了，短期内不可能替代，但 Rust 作为补充非常合适。", time: "3 小时前" },
-      { id: 102, author: "rust_fan", avatar: "RF", content: "所有权模型天然适合内核开发，Use-after-free 这种 bug 直接在编译期消除。", time: "2 小时前" },
-      { id: 103, author: "SysLog", avatar: "SL", content: "我认为两者会长期共存。新模块用 Rust 写是趋势，但重写已有代码不现实。", time: "1 小时前" },
+      { id: "101", author: "kernel_dev", avatar: "KD", content: "C 在内核中的生态太成熟了，短期内不可能替代，但 Rust 作为补充非常合适。", time: "3 小时前" },
+      { id: "102", author: "rust_fan", avatar: "RF", content: "所有权模型天然适合内核开发，Use-after-free 这种 bug 直接在编译期消除。", time: "2 小时前" },
+      { id: "103", author: "SysLog", avatar: "SL", content: "我认为两者会长期共存。新模块用 Rust 写是趋势，但重写已有代码不现实。", time: "1 小时前" },
     ],
     tags: ["Rust", "C", "Linux 内核"],
     proposedBy: "SysLog",
     timeLeft: "16 小时",
+    userVote: null,
   },
   {
-    id: 2,
+    id: "2",
     title: "io_uring vs epoll：下一代 I/O 多路复用的选择",
     description: "io_uring 提供了更统一和高效的异步 I/O 接口，但 epoll 更成熟稳定。在新项目中你会选择哪个？",
     category: "技术选型",
     votes: 183,
     heat: 85,
+    commentCount: 2,
     comments: [
-      { id: 201, author: "perf_guru", avatar: "PG", content: "io_uring 在高并发场景下吞吐量提升 30%+，没有理由不用。", time: "5 小时前" },
-      { id: 202, author: "old_school", avatar: "OS", content: "epoll 经过二十年实战验证，io_uring 的安全问题值得警惕。", time: "4 小时前" },
+      { id: "201", author: "perf_guru", avatar: "PG", content: "io_uring 在高并发场景下吞吐量提升 30%+，没有理由不用。", time: "5 小时前" },
+      { id: "202", author: "old_school", avatar: "OS", content: "epoll 经过二十年实战验证，io_uring 的安全问题值得警惕。", time: "4 小时前" },
     ],
     tags: ["io_uring", "epoll", "Linux"],
     proposedBy: "perf_guru",
     timeLeft: "16 小时",
+    userVote: null,
   },
   {
-    id: 3,
+    id: "3",
     title: "eBPF 是否是可观测性的终极解决方案？",
     description: "eBPF 允许在内核中安全运行自定义程序，正在革新系统监控和安全领域。你怎么看它的未来？",
     category: "前沿技术",
     votes: 156,
     heat: 79,
+    commentCount: 1,
     comments: [
-      { id: 301, author: "observability_pro", avatar: "OP", content: "eBPF 不只是可观测性，它在安全、网络方面的应用同样革命性。", time: "6 小时前" },
+      { id: "301", author: "observability_pro", avatar: "OP", content: "eBPF 不只是可观测性，它在安全、网络方面的应用同样革命性。", time: "6 小时前" },
     ],
     tags: ["eBPF", "可观测性", "安全"],
     proposedBy: "observability_pro",
     timeLeft: "16 小时",
+    userVote: null,
   },
   {
-    id: 4,
+    id: "4",
     title: "RISC-V 会成为下一个 ARM 吗？",
     description: "RISC-V 的开放指令集架构正在快速发展。从嵌入式到服务器，RISC-V 能在多大程度上挑战 ARM 和 x86 的地位？",
     category: "硬件架构",
     votes: 134,
     heat: 72,
+    commentCount: 2,
     comments: [
-      { id: 401, author: "chip_designer", avatar: "CD", content: "开放 ISA 是巨大优势，但生态建设还需要时间。5-10 年内会有显著变化。", time: "8 小时前" },
-      { id: 402, author: "embedded_dev", avatar: "ED", content: "在嵌入式领域 RISC-V 已经有很好的应用了，MCU 市场正在快速增长。", time: "7 小时前" },
+      { id: "401", author: "chip_designer", avatar: "CD", content: "开放 ISA 是巨大优势，但生态建设还需要时间。5-10 年内会有显著变化。", time: "8 小时前" },
+      { id: "402", author: "embedded_dev", avatar: "ED", content: "在嵌入式领域 RISC-V 已经有很好的应用了，MCU 市场正在快速增长。", time: "7 小时前" },
     ],
     tags: ["RISC-V", "ARM", "ISA"],
     proposedBy: "chip_designer",
     timeLeft: "16 小时",
+    userVote: null,
   },
   {
-    id: 5,
+    id: "5",
     title: "WebAssembly 能否成为服务端的通用运行时？",
     description: "WASI 和 Component Model 正在让 Wasm 超越浏览器。作为服务端沙箱运行时，它能取代容器吗？",
     category: "新方向",
     votes: 98,
     heat: 61,
+    commentCount: 0,
     comments: [],
     tags: ["Wasm", "WASI", "云原生"],
     proposedBy: "cloud_native",
     timeLeft: "16 小时",
+    userVote: null,
   },
   {
-    id: 6,
+    id: "6",
     title: "你最想学的下一门系统编程语言是什么？",
     description: "Zig、Nim、Odin、Hare... 新的系统编程语言层出不穷。除了 C 和 Rust，你最想深入学习哪一门？",
     category: "语言之争",
     votes: 89,
     heat: 55,
+    commentCount: 1,
     comments: [
-      { id: 601, author: "polyglot", avatar: "PL", content: "Zig，编译速度快，和 C 的互操作性好，错误处理模型优雅。", time: "10 小时前" },
+      { id: "601", author: "polyglot", avatar: "PL", content: "Zig，编译速度快，和 C 的互操作性好，错误处理模型优雅。", time: "10 小时前" },
     ],
     tags: ["Zig", "Nim", "编程语言"],
     proposedBy: "polyglot",
     timeLeft: "16 小时",
+    userVote: null,
   },
 ]
 
@@ -177,23 +191,50 @@ function HeatBar({ heat }: { heat: number }) {
 }
 
 export function TrendingTopics() {
-  const [topics, setTopics] = useState(initialTopics)
+  const [topics, setTopics] = useState<Topic[]>(initialTopics)
+  const [loading, setLoading] = useState(true)
   // 使用Map记录每个话题的投票状态：undefined=未投票, 'up'=赞同, 'down'=反对
-  const [voteState, setVoteState] = useState<Map<number, 'up' | 'down'>>(new Map())
-  const [expandedTopic, setExpandedTopic] = useState<number | null>(null)
+  const [voteState, setVoteState] = useState<Map<string, 'up' | 'down'>>(new Map())
+  const [expandedTopic, setExpandedTopic] = useState<string | null>(null)
   const [newCommentText, setNewCommentText] = useState("")
   const [sortBy, setSortBy] = useState<"votes" | "heat" | "comments">("votes")
   const { user, isLoggedIn } = useAuth()
+
+  // 从API获取话题数据
+  useEffect(() => {
+    const fetchTopics = async () => {
+      try {
+        const response = await fetch(`/api/trending?sortBy=${sortBy}`)
+        const data = await response.json()
+        if (data.success && data.data) {
+          setTopics(data.data)
+          // 设置用户的投票状态
+          const newVoteState = new Map<string, 'up' | 'down'>()
+          data.data.forEach((topic: Topic) => {
+            if (topic.userVote) {
+              newVoteState.set(topic.id, topic.userVote)
+            }
+          })
+          setVoteState(newVoteState)
+        }
+      } catch (error) {
+        console.error('获取热榜话题失败:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchTopics()
+  }, [sortBy])
 
   const sortedTopics = useMemo(() => {
     return [...topics].sort((a, b) => {
       if (sortBy === "votes") return b.votes - a.votes
       if (sortBy === "heat") return b.heat - a.heat
-      return b.comments.length - a.comments.length
+      return (b.commentCount || b.comments.length) - (a.commentCount || a.comments.length)
     })
   }, [topics, sortBy])
 
-  const handleVote = (id: number, direction: "up" | "down") => {
+  const handleVote = (id: string, direction: "up" | "down") => {
     if (!isLoggedIn) {
       toast.error("请先登录后再投票")
       return
@@ -232,14 +273,14 @@ export function TrendingTopics() {
     }
   }
 
-  const handleComment = (topicId: number) => {
+  const handleComment = (topicId: string) => {
     if (!isLoggedIn || !user) {
       toast.error("请先登录后再评论")
       return
     }
     if (!newCommentText.trim()) return
     const comment: TopicComment = {
-      id: Date.now(),
+      id: `temp_${Date.now()}`,
       author: user.name,
       avatar: getAvatarInitials(user.name, user.avatar),
       content: newCommentText,
@@ -247,7 +288,7 @@ export function TrendingTopics() {
     }
     setTopics(topics.map((t) =>
       t.id === topicId
-        ? { ...t, comments: [...t.comments, comment], heat: Math.min(100, t.heat + 3) }
+        ? { ...t, comments: [...t.comments, comment], commentCount: (t.commentCount || 0) + 1, heat: Math.min(100, t.heat + 3) }
         : t
     ))
     setNewCommentText("")
@@ -378,7 +419,7 @@ export function TrendingTopics() {
                         className="flex items-center gap-1.5 text-xs text-muted-foreground/50 hover:text-primary transition-colors duration-300"
                       >
                         <MessageSquare className="h-3.5 w-3.5" />
-                        {topic.comments.length} 条讨论
+                        {(topic.commentCount || topic.comments.length)} 条讨论
                       </button>
                       <span className="flex items-center gap-1.5 text-xs text-muted-foreground/30">
                         <Clock className="h-3 w-3" />
