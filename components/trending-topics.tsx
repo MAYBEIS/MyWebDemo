@@ -178,7 +178,8 @@ function HeatBar({ heat }: { heat: number }) {
 
 export function TrendingTopics() {
   const [topics, setTopics] = useState(initialTopics)
-  const [votedTopics, setVotedTopics] = useState<Set<number>>(new Set())
+  // 使用Map记录每个话题的投票状态：undefined=未投票, 'up'=赞同, 'down'=反对
+  const [voteState, setVoteState] = useState<Map<number, 'up' | 'down'>>(new Map())
   const [expandedTopic, setExpandedTopic] = useState<number | null>(null)
   const [newCommentText, setNewCommentText] = useState("")
   const [sortBy, setSortBy] = useState<"votes" | "heat" | "comments">("votes")
@@ -197,21 +198,35 @@ export function TrendingTopics() {
       toast.error("请先登录后再投票")
       return
     }
-    const wasVoted = votedTopics.has(id)
-    if (wasVoted) {
-      setVotedTopics((prev) => {
-        const next = new Set(prev)
-        next.delete(id)
-        return next
-      })
+    const currentVote = voteState.get(id)
+    
+    if (currentVote === direction) {
+      // 如果点击的是相同方向，则取消投票
+      const newVoteState = new Map(voteState)
+      newVoteState.delete(id)
+      setVoteState(newVoteState)
+      
       setTopics(topics.map((t) =>
-        t.id === id ? { ...t, votes: t.votes - 1, heat: Math.max(0, t.heat - 2) } : t
+        t.id === id 
+          ? { ...t, votes: t.votes + (direction === "up" ? -1 : 1), heat: Math.max(0, t.heat - 2) } 
+          : t
+      ))
+    } else if (currentVote) {
+      // 如果已经投过相反的票，切换投票方向
+      setVoteState(new Map(voteState).set(id, direction))
+      
+      setTopics(topics.map((t) =>
+        t.id === id 
+          ? { ...t, votes: t.votes + (direction === "up" ? 2 : -2), heat: Math.min(100, t.heat + 2) } 
+          : t
       ))
     } else {
-      setVotedTopics(new Set([...votedTopics, id]))
+      // 第一次投票
+      setVoteState(new Map(voteState).set(id, direction))
+      
       setTopics(topics.map((t) =>
-        t.id === id
-          ? { ...t, votes: t.votes + (direction === "up" ? 1 : -1), heat: Math.min(100, t.heat + 2) }
+        t.id === id 
+          ? { ...t, votes: t.votes + (direction === "up" ? 1 : -1), heat: Math.min(100, t.heat + 2) } 
           : t
       ))
     }
@@ -287,7 +302,8 @@ export function TrendingTopics() {
       <div className="flex flex-col gap-4">
         {sortedTopics.map((topic, index) => {
           const isExpanded = expandedTopic === topic.id
-          const isVoted = votedTopics.has(topic.id)
+          const currentVote = voteState.get(topic.id)
+          const isVoted = currentVote !== undefined
 
           return (
             <div
@@ -305,19 +321,27 @@ export function TrendingTopics() {
                     <button
                       onClick={() => handleVote(topic.id, "up")}
                       className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-all duration-300 ${
-                        isVoted
-                          ? "border-primary/30 bg-primary/10 text-primary"
+                        currentVote === "up"
+                          ? "border-primary/50 bg-primary/20 text-primary"
                           : "border-border/40 text-muted-foreground/40 hover:border-primary/20 hover:text-primary"
                       }`}
                     >
                       <ChevronUp className="h-4 w-4" />
                     </button>
-                    <span className={`text-sm font-bold font-mono ${isVoted ? "text-primary" : "text-foreground"}`}>
+                    <span className={`text-sm font-bold font-mono ${
+                      currentVote === "up" ? "text-primary" : 
+                      currentVote === "down" ? "text-destructive" : 
+                      "text-foreground"
+                    }`}>
                       {topic.votes}
                     </span>
                     <button
                       onClick={() => handleVote(topic.id, "down")}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/30 text-muted-foreground/20 hover:border-destructive/20 hover:text-destructive transition-all duration-300"
+                      className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-all duration-300 ${
+                        currentVote === "down"
+                          ? "border-destructive/50 bg-destructive/20 text-destructive"
+                          : "border-border/30 text-muted-foreground/40 hover:border-destructive/20 hover:text-destructive"
+                      }`}
                     >
                       <ChevronDown className="h-4 w-4" />
                     </button>
