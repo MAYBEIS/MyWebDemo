@@ -670,6 +670,288 @@ Rust 学习曲线陡峭，但值得投入。`,
 
   console.log('✅ 创建示例留言')
 
+  // 创建热榜话题
+  const topics = await Promise.all([
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_1`,
+        title: 'Rust 能否取代 C 成为内核开发的主力语言？',
+        description: '随着 Rust for Linux 项目的推进，越来越多的内核模块开始用 Rust 编写。你认为 Rust 最终能取代 C 在内核开发中的地位吗？',
+        category: '语言之争',
+        voteType: 'binary',
+        votes: 247,
+        heat: 98,
+        tags: JSON.stringify(['Rust', 'C', 'Linux 内核']),
+        proposedBy: admin.name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24小时后过期
+      },
+    }),
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_2`,
+        title: 'io_uring vs epoll：下一代 I/O 多路复用的选择',
+        description: 'io_uring 提供了更统一和高效的异步 I/O 接口，但 epoll 更成熟稳定。在新项目中你会选择哪个？',
+        category: '技术选型',
+        voteType: 'binary',
+        votes: 183,
+        heat: 85,
+        tags: JSON.stringify(['io_uring', 'epoll', 'Linux']),
+        proposedBy: users[0].name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    }),
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_3`,
+        title: '你更看好哪个 AI 编程辅助工具？',
+        description: '现在市面上有很多 AI 编程辅助工具，你最常用哪一个？',
+        category: '技术选型',
+        voteType: 'multiple',
+        votes: 0,
+        heat: 95,
+        tags: JSON.stringify(['AI', '编程助手', '工具']),
+        proposedBy: users[1].name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    }),
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_4`,
+        title: 'eBPF 是否是可观测性的终极解决方案？',
+        description: 'eBPF 允许在内核中安全运行自定义程序，正在革新系统监控和安全领域。你怎么看它的未来？',
+        category: '前沿技术',
+        voteType: 'binary',
+        votes: 156,
+        heat: 79,
+        tags: JSON.stringify(['eBPF', '可观测性', '安全']),
+        proposedBy: users[1].name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    }),
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_5`,
+        title: '你最喜欢的后端开发语言是哪个？',
+        description: '请选择你最常用或最喜欢的后端开发语言',
+        category: '语言之争',
+        voteType: 'multiple',
+        votes: 0,
+        heat: 88,
+        tags: JSON.stringify(['后端', '编程语言', '开发']),
+        proposedBy: users[2].name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    }),
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_6`,
+        title: 'RISC-V 会成为下一个 ARM 吗？',
+        description: 'RISC-V 的开放指令集架构正在快速发展。从嵌入式到服务器，RISC-V 能在多大程度上挑战 ARM 和 x86 的地位？',
+        category: '硬件架构',
+        voteType: 'binary',
+        votes: 134,
+        heat: 72,
+        tags: JSON.stringify(['RISC-V', 'ARM', 'ISA']),
+        proposedBy: users[2].name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    }),
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_7`,
+        title: '你使用哪个云平台部署服务？',
+        description: '请选择你最常用的云服务平台',
+        category: '技术选型',
+        voteType: 'multiple',
+        votes: 0,
+        heat: 75,
+        tags: JSON.stringify(['云', '部署', 'DevOps']),
+        proposedBy: users[3].name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    }),
+    prisma.trending_topics.create({
+      data: {
+        id: `topic_${Date.now()}_8`,
+        title: 'WebAssembly 能否成为服务端的通用运行时？',
+        description: 'WASI 和 Component Model 正在让 Wasm 超越浏览器。作为服务端沙箱运行时，它能取代容器吗？',
+        category: '新方向',
+        voteType: 'binary',
+        votes: 98,
+        heat: 61,
+        tags: JSON.stringify(['Wasm', 'WASI', '云原生']),
+        proposedBy: users[3].name,
+        status: 'active',
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    }),
+  ])
+
+  console.log('✅ 创建热榜话题:', topics.length, '个')
+
+  // 为多选一类型话题创建投票选项
+  const multipleTopics = topics.filter((t: any) => t.voteType === 'multiple')
+  
+  for (const topic of multipleTopics) {
+    if (topic.title.includes('AI 编程')) {
+      await prisma.topic_options.createMany({
+        data: [
+          { id: `opt_${topic.id}_1`, topicId: topic.id, text: 'GitHub Copilot', votes: 45 },
+          { id: `opt_${topic.id}_2`, topicId: topic.id, text: 'Cursor', votes: 38 },
+          { id: `opt_${topic.id}_3`, topicId: topic.id, text: '通义灵码', votes: 22 },
+          { id: `opt_${topic.id}_4`, topicId: topic.id, text: 'Codeium', votes: 15 },
+        ],
+      })
+    } else if (topic.title.includes('后端开发语言')) {
+      await prisma.topic_options.createMany({
+        data: [
+          { id: `opt_${topic.id}_1`, topicId: topic.id, text: 'Go', votes: 56 },
+          { id: `opt_${topic.id}_2`, topicId: topic.id, text: 'Python', votes: 42 },
+          { id: `opt_${topic.id}_3`, topicId: topic.id, text: 'Node.js', votes: 35 },
+          { id: `opt_${topic.id}_4`, topicId: topic.id, text: 'Rust', votes: 28 },
+          { id: `opt_${topic.id}_5`, topicId: topic.id, text: 'Java', votes: 18 },
+        ],
+      })
+    } else if (topic.title.includes('云平台')) {
+      await prisma.topic_options.createMany({
+        data: [
+          { id: `opt_${topic.id}_1`, topicId: topic.id, text: '阿里云', votes: 48 },
+          { id: `opt_${topic.id}_2`, topicId: topic.id, text: '腾讯云', votes: 32 },
+          { id: `opt_${topic.id}_3`, topicId: topic.id, text: 'AWS', votes: 25 },
+          { id: `opt_${topic.id}_4`, topicId: topic.id, text: 'Vercel', votes: 18 },
+        ],
+      })
+    }
+  }
+
+  console.log('✅ 创建多选一投票选项')
+
+  // 为多选一话题创建投票记录（模拟已有投票）
+  const aiTopic = topics.find((t: any) => t.title.includes('AI 编程'))
+  const backendTopic = topics.find((t: any) => t.title.includes('后端开发语言'))
+  const cloudTopic = topics.find((t: any) => t.title.includes('云平台'))
+
+  if (aiTopic) {
+    const aiOptions = await prisma.topic_options.findMany({
+      where: { topicId: aiTopic.id }
+    })
+    // 模拟投票分布
+    await prisma.topic_votes_multiple.createMany({
+      data: [
+        { id: `vote_m_${Date.now()}_ai_1`, topicId: aiTopic.id, optionId: aiOptions[0]?.id, userId: users[0].id },
+        { id: `vote_m_${Date.now()}_ai_2`, topicId: aiTopic.id, optionId: aiOptions[0]?.id, userId: users[1].id },
+        { id: `vote_m_${Date.now()}_ai_3`, topicId: aiTopic.id, optionId: aiOptions[0]?.id, userId: users[2].id },
+        { id: `vote_m_${Date.now()}_ai_4`, topicId: aiTopic.id, optionId: aiOptions[1]?.id, userId: users[3].id },
+        { id: `vote_m_${Date.now()}_ai_5`, topicId: aiTopic.id, optionId: aiOptions[1]?.id, userId: users[4].id },
+        { id: `vote_m_${Date.now()}_ai_6`, topicId: aiTopic.id, optionId: aiOptions[1]?.id, userId: admin.id },
+        { id: `vote_m_${Date.now()}_ai_7`, topicId: aiTopic.id, optionId: aiOptions[2]?.id, userId: users[0].id },
+        { id: `vote_m_${Date.now()}_ai_8`, topicId: aiTopic.id, optionId: aiOptions[2]?.id, userId: users[1].id },
+      ].filter(v => v.optionId)
+    })
+  }
+
+  if (backendTopic) {
+    const backendOptions = await prisma.topic_options.findMany({
+      where: { topicId: backendTopic.id }
+    })
+    await prisma.topic_votes_multiple.createMany({
+      data: [
+        { id: `vote_m_${Date.now()}_be_1`, topicId: backendTopic.id, optionId: backendOptions[0]?.id, userId: users[0].id },
+        { id: `vote_m_${Date.now()}_be_2`, topicId: backendTopic.id, optionId: backendOptions[0]?.id, userId: users[1].id },
+        { id: `vote_m_${Date.now()}_be_3`, topicId: backendTopic.id, optionId: backendOptions[0]?.id, userId: users[2].id },
+        { id: `vote_m_${Date.now()}_be_4`, topicId: backendTopic.id, optionId: backendOptions[0]?.id, userId: users[3].id },
+        { id: `vote_m_${Date.now()}_be_5`, topicId: backendTopic.id, optionId: backendOptions[1]?.id, userId: users[4].id },
+        { id: `vote_m_${Date.now()}_be_6`, topicId: backendTopic.id, optionId: backendOptions[1]?.id, userId: admin.id },
+        { id: `vote_m_${Date.now()}_be_7`, topicId: backendTopic.id, optionId: backendOptions[2]?.id, userId: users[0].id },
+        { id: `vote_m_${Date.now()}_be_8`, topicId: backendTopic.id, optionId: backendOptions[2]?.id, userId: users[1].id },
+        { id: `vote_m_${Date.now()}_be_9`, topicId: backendTopic.id, optionId: backendOptions[3]?.id, userId: users[2].id },
+      ].filter(v => v.optionId)
+    })
+  }
+
+  if (cloudTopic) {
+    const cloudOptions = await prisma.topic_options.findMany({
+      where: { topicId: cloudTopic.id }
+    })
+    await prisma.topic_votes_multiple.createMany({
+      data: [
+        { id: `vote_m_${Date.now()}_cl_1`, topicId: cloudTopic.id, optionId: cloudOptions[0]?.id, userId: users[0].id },
+        { id: `vote_m_${Date.now()}_cl_2`, topicId: cloudTopic.id, optionId: cloudOptions[0]?.id, userId: users[1].id },
+        { id: `vote_m_${Date.now()}_cl_3`, topicId: cloudTopic.id, optionId: cloudOptions[0]?.id, userId: users[2].id },
+        { id: `vote_m_${Date.now()}_cl_4`, topicId: cloudTopic.id, optionId: cloudOptions[1]?.id, userId: users[3].id },
+        { id: `vote_m_${Date.now()}_cl_5`, topicId: cloudTopic.id, optionId: cloudOptions[1]?.id, userId: users[4].id },
+        { id: `vote_m_${Date.now()}_cl_6`, topicId: cloudTopic.id, optionId: cloudOptions[2]?.id, userId: admin.id },
+        { id: `vote_m_${Date.now()}_cl_7`, topicId: cloudTopic.id, optionId: cloudOptions[3]?.id, userId: users[0].id },
+      ].filter(v => v.optionId)
+    })
+  }
+
+  console.log('✅ 创建多选一投票记录')
+
+  // 为热榜话题创建评论
+  await prisma.topic_comments.createMany({
+    data: [
+      {
+        id: `topic_comment_${Date.now()}_1`,
+        topicId: topics[0].id,
+        userId: users[0].id,
+        content: 'C 在内核中的生态太成熟了，短期内不可能替代，但 Rust 作为补充非常合适。',
+      },
+      {
+        id: `topic_comment_${Date.now()}_2`,
+        topicId: topics[0].id,
+        userId: users[1].id,
+        content: '所有权模型天然适合内核开发，Use-after-free 这种 bug 直接在编译期消除。',
+      },
+      {
+        id: `topic_comment_${Date.now()}_3`,
+        topicId: topics[0].id,
+        userId: admin.id,
+        content: '我认为两者会长期共存。新模块用 Rust 写是趋势，但重写已有代码不现实。',
+      },
+      {
+        id: `topic_comment_${Date.now()}_4`,
+        topicId: topics[1].id,
+        userId: users[2].id,
+        content: 'io_uring 在高并发场景下吞吐量提升 30%+，没有理由不用。',
+      },
+      {
+        id: `topic_comment_${Date.now()}_5`,
+        topicId: topics[1].id,
+        userId: users[3].id,
+        content: 'epoll 经过二十年实战验证，io_uring 的安全问题值得警惕。',
+      },
+      {
+        id: `topic_comment_${Date.now()}_6`,
+        topicId: topics[2].id,
+        userId: users[0].id,
+        content: 'eBPF 不只是可观测性，它在安全、网络方面的应用同样革命性。',
+      },
+    ],
+  })
+
+  console.log('✅ 创建热榜评论')
+
+  // 为热榜话题创建投票记录
+  await prisma.topic_votes.createMany({
+    data: [
+      { id: `topic_vote_${Date.now()}_1`, topicId: topics[0].id, userId: users[0].id, direction: 'up' },
+      { id: `topic_vote_${Date.now()}_2`, topicId: topics[0].id, userId: users[1].id, direction: 'up' },
+      { id: `topic_vote_${Date.now()}_3`, topicId: topics[0].id, userId: users[2].id, direction: 'down' },
+      { id: `topic_vote_${Date.now()}_4`, topicId: topics[1].id, userId: users[0].id, direction: 'up' },
+      { id: `topic_vote_${Date.now()}_5`, topicId: topics[2].id, userId: admin.id, direction: 'up' },
+    ],
+  })
+
+  console.log('✅ 创建热榜投票记录')
+
   console.log('🎉 数据库播种完成！')
   console.log('')
   console.log('📝 测试账号信息:')

@@ -14,9 +14,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { ShoppingCart, Crown, Key, Check, Loader2, QrCode, Ticket, Wallet, CreditCard, TestTube } from 'lucide-react'
+import { ShoppingCart, Crown, Key, Check, Loader2, QrCode, Ticket, Wallet, CreditCard, TestTube, CheckCircle2, XCircle, ArrowRight, Eye, Copy, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/lib/auth-store'
 import { toast } from 'sonner'
+import { QRCodeDisplay } from '@/components/qr-code'
 
 // 产品类型定义
 interface Product {
@@ -82,6 +83,28 @@ export default function ShopPage() {
     finalAmount: number
   } | null>(null)
   const [validatingCoupon, setValidatingCoupon] = useState(false)
+
+  // 支付二维码对话框状态
+  const [payQrDialogOpen, setPayQrDialogOpen] = useState(false)
+  const [payQrCodeUrl, setPayQrCodeUrl] = useState<string | null>(null)
+  const [payingOrder, setPayingOrder] = useState<{
+    id: string
+    orderNo: string
+    amount: number
+    productName: string
+  } | null>(null)
+  const [checkingPayment, setCheckingPayment] = useState(false)
+
+  // 支付结果对话框状态
+  const [paymentResultDialogOpen, setPaymentResultDialogOpen] = useState(false)
+  const [paymentResult, setPaymentResult] = useState<{
+    success: boolean
+    message: string
+    orderNo?: string
+    amount?: number
+    productName?: string
+    productKey?: string | null
+  } | null>(null)
 
   // 获取产品列表和支付渠道
   useEffect(() => {
@@ -219,6 +242,8 @@ export default function ShopPage() {
       const data = await response.json()
       if (data.success) {
         const orderId = data.data.id
+        const orderNo = data.data.orderNo
+        const amount = data.data.amount
         
         // 如果用户已是会员，显示提示信息
         if (data.membershipInfo) {
@@ -226,6 +251,15 @@ export default function ShopPage() {
             duration: 5000
           })
         }
+        
+        // 先设置订单信息，不打开对话框
+        setPayingOrder({
+          id: orderId,
+          orderNo: orderNo,
+          amount: amount,
+          productName: selectedProduct.name
+        })
+        setPayQrCodeUrl(null) // 准备加载二维码
         
         // 根据选择的支付方式调用不同的支付接口
         if (selectedPaymentMethod === 'wechat') {
@@ -243,10 +277,11 @@ export default function ShopPage() {
 
           const payData = await payResponse.json()
           if (payData.success && payData.data.codeUrl) {
-            router.push(`/orders?pay=${orderId}&codeUrl=${encodeURIComponent(payData.data.codeUrl)}`)
+            // 设置二维码后再打开对话框
+            setPayQrCodeUrl(payData.data.codeUrl)
+            setPayQrDialogOpen(true)
           } else {
             toast.error(payData.error || '创建支付订单失败')
-            router.push('/orders')
           }
         } else if (selectedPaymentMethod === 'alipay') {
           // 支付宝支付
@@ -265,10 +300,11 @@ export default function ShopPage() {
             // 跳转到支付宝支付页面
             window.open(payData.data.payUrl, '_blank')
             toast.success('已打开支付页面，请完成支付')
-            router.push('/orders')
+            // 打开等待支付对话框
+            setPayQrCodeUrl(null)
+            setPayQrDialogOpen(true)
           } else {
             toast.error(payData.error || '创建支付订单失败')
-            router.push('/orders')
           }
         } else if (selectedPaymentMethod.startsWith('xunhupay_')) {
           // 虎皮椒支付
@@ -288,16 +324,18 @@ export default function ShopPage() {
           if (payData.success && payData.data.payUrl) {
             if (payData.data.testMode) {
               // 测试模式显示二维码
-              router.push(`/orders?pay=${orderId}&codeUrl=${encodeURIComponent(payData.data.payUrl)}`)
+              setPayQrCodeUrl(payData.data.payUrl)
+              setPayQrDialogOpen(true)
             } else {
               // 正式模式跳转到支付页面
               window.open(payData.data.payUrl, '_blank')
               toast.success('已打开支付页面，请完成支付')
-              router.push('/orders')
+              // 打开等待支付对话框
+              setPayQrCodeUrl(null)
+              setPayQrDialogOpen(true)
             }
           } else {
             toast.error(payData.error || '创建支付订单失败')
-            router.push('/orders')
           }
         } else if (selectedPaymentMethod === 'test') {
           // 测试支付 - 模拟微信支付的流程
@@ -313,16 +351,15 @@ export default function ShopPage() {
 
           const payData = await payResponse.json()
           if (payData.success && payData.data.codeUrl) {
-            // 跳转到订单页面，显示支付二维码（模拟微信支付流程）
-            router.push(`/orders?pay=${orderId}&codeUrl=${encodeURIComponent(payData.data.codeUrl)}&testMode=true`)
+            // 设置二维码后再打开对话框
+            setPayQrCodeUrl(payData.data.codeUrl)
+            setPayQrDialogOpen(true)
           } else {
             toast.error(payData.error || '创建支付订单失败')
-            router.push('/orders')
           }
         } else {
-          // 其他支付方式，直接跳转到订单页面
-          toast.success('订单创建成功')
-          router.push('/orders')
+          // 其他支付方式
+          toast.success('订单创建成功，请等待处理')
         }
       } else {
         toast.error(data.error || '创建订单失败')
@@ -349,6 +386,55 @@ export default function ShopPage() {
   const formatPrice = (price: number) => {
     return `¥${price.toFixed(2)}`
   }
+
+  // 轮询检查支付状态
+  useEffect(() => {
+    if (!payQrDialogOpen || !payingOrder) return
+
+    const checkPayment = async () => {
+      setCheckingPayment(true)
+      try {
+        // 根据订单的支付方式选择不同的查询接口
+        let apiUrl = `/api/shop/wechat-pay?orderNo=${payingOrder.orderNo}`
+        
+        if (selectedPaymentMethod === 'test') {
+          apiUrl = `/api/shop/test-pay?orderNo=${payingOrder.orderNo}`
+        } else if (selectedPaymentMethod.startsWith('xunhupay_')) {
+          apiUrl = `/api/shop/xunhupay?orderNo=${payingOrder.orderNo}`
+        }
+        
+        const response = await fetch(apiUrl)
+        const data = await response.json()
+        
+        if (data.success && data.data.tradeState === 'SUCCESS') {
+          // 关闭二维码对话框
+          setPayQrDialogOpen(false)
+          // 显示支付成功弹窗，包含订单详情
+          setPaymentResult({
+            success: true,
+            message: '支付成功！',
+            orderNo: payingOrder.orderNo,
+            amount: payingOrder.amount,
+            productName: payingOrder.productName,
+            productKey: data.data.productKey || null
+          })
+          setPaymentResultDialogOpen(true)
+        }
+      } catch (error) {
+        console.error('检查支付状态失败:', error)
+      } finally {
+        setCheckingPayment(false)
+      }
+    }
+
+    // 每3秒检查一次支付状态
+    const interval = setInterval(checkPayment, 3000)
+    
+    // 立即检查一次
+    checkPayment()
+
+    return () => clearInterval(interval)
+  }, [payQrDialogOpen, payingOrder, selectedPaymentMethod])
 
   // 获取库存状态
   const getStockStatus = (product: Product) => {
@@ -663,6 +749,220 @@ export default function ShopPage() {
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               )}
               确认购买
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 支付二维码对话框 */}
+      <Dialog open={payQrDialogOpen} onOpenChange={setPayQrDialogOpen}>
+        <DialogContent className="max-w-sm" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>扫码支付</DialogTitle>
+            <DialogDescription>
+              请扫描下方二维码完成支付
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col items-center py-4">
+            {/* 加载状态 */}
+            {!payQrCodeUrl && (
+              <div className="flex flex-col items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                <p className="text-sm text-muted-foreground">正在创建支付订单...</p>
+              </div>
+            )}
+
+            {/* 二维码显示区域 */}
+            {payQrCodeUrl && (
+              <>
+                <div className="bg-white p-4 rounded-lg border mb-4">
+                  <QRCodeDisplay value={payQrCodeUrl} size={200} />
+                </div>
+
+                {/* 订单信息 */}
+                {payingOrder && (
+                  <div className="text-center mb-4 w-full">
+                    <div className="text-sm text-muted-foreground mb-1">
+                      {payingOrder.productName}
+                    </div>
+                    <div className="text-2xl font-bold text-primary">
+                      {formatPrice(payingOrder.amount)}
+                    </div>
+                  </div>
+                )}
+
+                {/* 支付状态提示 */}
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+                  {checkingPayment ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>正在检查支付状态...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>等待支付中...</span>
+                    </>
+                  )}
+                </div>
+
+                {/* 手动刷新按钮 */}
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={async () => {
+                    if (!payingOrder) return
+                    setCheckingPayment(true)
+                    try {
+                      let apiUrl = `/api/shop/wechat-pay?orderNo=${payingOrder.orderNo}`
+                      if (selectedPaymentMethod === 'test') {
+                        apiUrl = `/api/shop/test-pay?orderNo=${payingOrder.orderNo}`
+                      } else if (selectedPaymentMethod.startsWith('xunhupay_')) {
+                        apiUrl = `/api/shop/xunhupay?orderNo=${payingOrder.orderNo}`
+                      }
+                      const response = await fetch(apiUrl)
+                      const data = await response.json()
+                      if (data.success && data.data.tradeState === 'SUCCESS') {
+                        setPayQrDialogOpen(false)
+                        setPaymentResult({
+                          success: true,
+                          message: '支付成功！',
+                          orderNo: payingOrder.orderNo,
+                          amount: payingOrder.amount,
+                          productName: payingOrder.productName,
+                          productKey: data.data.productKey || null
+                        })
+                        setPaymentResultDialogOpen(true)
+                      } else {
+                        toast.info('暂未检测到支付，请完成扫码支付后重试')
+                      }
+                    } catch (error) {
+                      console.error('检查支付状态失败:', error)
+                    } finally {
+                      setCheckingPayment(false)
+                    }
+                  }}
+                  disabled={checkingPayment}
+                >
+                  {checkingPayment ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  我已支付，刷新状态
+                </Button>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 支付结果对话框 */}
+      <Dialog open={paymentResultDialogOpen} onOpenChange={setPaymentResultDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader className="text-center">
+            {paymentResult?.success ? (
+              <div className="flex flex-col items-center">
+                <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-4">
+                  <CheckCircle2 className="h-10 w-10 text-green-500" />
+                </div>
+                <DialogTitle className="text-xl text-green-600 dark:text-green-400">
+                  支付成功
+                </DialogTitle>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center">
+                <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
+                  <XCircle className="h-10 w-10 text-red-500" />
+                </div>
+                <DialogTitle className="text-xl text-red-600 dark:text-red-400">
+                  支付失败
+                </DialogTitle>
+              </div>
+            )}
+          </DialogHeader>
+
+          <div className="py-4 text-center space-y-3">
+            {/* 订单信息 */}
+            {paymentResult && (
+              <div className="p-3 bg-muted/30 rounded-lg">
+                <div className="font-medium text-lg mb-1">{paymentResult.productName}</div>
+                {paymentResult.orderNo && (
+                  <div className="text-sm text-muted-foreground mb-1">
+                    订单号: <span className="font-mono">{paymentResult.orderNo}</span>
+                  </div>
+                )}
+                {paymentResult.amount !== undefined && (
+                  <div className="text-lg font-medium">
+                    支付金额: <span className="text-primary font-bold">{formatPrice(paymentResult.amount)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 消息提示 */}
+            <p className="text-muted-foreground">
+              {paymentResult?.message || (paymentResult?.success ? '感谢您的购买！' : '支付未完成，请重试或联系客服')}
+            </p>
+
+            {/* 成功时显示密钥 */}
+            {paymentResult?.success && paymentResult.productKey && (
+              <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <div className="text-sm text-muted-foreground mb-2">产品密钥</div>
+                <div className="flex items-center gap-2">
+                  <code className="bg-muted px-3 py-2 rounded font-mono text-sm flex-1 break-all">
+                    {paymentResult.productKey}
+                  </code>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(paymentResult.productKey!)
+                      toast.success('已复制到剪贴板')
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* 成功时显示密钥提示 */}
+            {paymentResult?.success && !paymentResult.productKey && (
+              <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <p className="text-sm text-green-700 dark:text-green-400">
+                  您可以在订单详情中查看产品密钥
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+            <Button 
+              variant="outline" 
+              className="flex-1"
+              onClick={() => {
+                setPaymentResultDialogOpen(false)
+                // 重置状态
+                setPayQrCodeUrl(null)
+                setPayingOrder(null)
+                setPaymentResult(null)
+              }}
+            >
+              <ShoppingCart className="h-4 w-4 mr-2" />
+              继续购物
+            </Button>
+            <Button 
+              className="flex-1"
+              onClick={() => {
+                setPaymentResultDialogOpen(false)
+                // 跳转到订单页面
+                router.push('/orders')
+              }}
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              查看订单
+              <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           </DialogFooter>
         </DialogContent>

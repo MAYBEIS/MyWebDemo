@@ -10,6 +10,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog'
 import {
   Select,
@@ -18,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, ShoppingBag, Eye, Copy, Check, QrCode, RefreshCw, X, Clock, CreditCard, Wallet, TestTube } from 'lucide-react'
+import { Loader2, ShoppingBag, Eye, Copy, Check, QrCode, RefreshCw, X, Clock, CreditCard, Wallet, TestTube, CheckCircle2, XCircle, ArrowRight } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/lib/auth-store'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -104,6 +105,17 @@ function OrdersPage() {
   const [availableChannels, setAvailableChannels] = useState<{code: string, name: string, icon?: string, config?: Record<string, string>, supportedPaymentTypes?: Array<{code: string, name: string, icon: string}>}[]>([])
   const [processingPayment, setProcessingPayment] = useState(false)
   
+  // 支付结果弹窗状态
+  const [paymentResultDialogOpen, setPaymentResultDialogOpen] = useState(false)
+  const [paymentResult, setPaymentResult] = useState<{
+    success: boolean
+    message: string
+    orderNo?: string
+    amount?: number
+  } | null>(null)
+  // 标记是否刚刚完成支付（用于阻止某些useEffect的干扰）
+  const [justPaid, setJustPaid] = useState(false)
+  
   // 倒计时状态
   const [countdowns, setCountdowns] = useState<Record<string, string>>({})
   
@@ -145,6 +157,9 @@ function OrdersPage() {
 
   // 处理从商店页面跳转过来的支付请求
   useEffect(() => {
+    // 如果刚刚完成支付，跳过这个useEffect的处理
+    if (justPaid) return
+    
     const payOrderId = searchParams.get('pay')
     const codeUrl = searchParams.get('codeUrl')
     
@@ -159,7 +174,7 @@ function OrdersPage() {
         router.replace('/orders')
       }
     }
-  }, [orders, searchParams, router])
+  }, [orders, searchParams, router, justPaid])
 
   // 轮询检查支付状态
   useEffect(() => {
@@ -181,8 +196,18 @@ function OrdersPage() {
         const data = await response.json()
         
         if (data.success && data.data.tradeState === 'SUCCESS') {
-          toast.success('支付成功！')
+          // 标记刚刚完成支付
+          setJustPaid(true)
+          // 关闭二维码对话框
           setPayQrDialogOpen(false)
+          // 显示支付成功弹窗
+          setPaymentResult({
+            success: true,
+            message: '支付成功！',
+            orderNo: payingOrder.orderNo,
+            amount: payingOrder.amount
+          })
+          setPaymentResultDialogOpen(true)
           fetchOrders() // 刷新订单列表
         }
       } catch (error) {
@@ -441,12 +466,22 @@ function OrdersPage() {
       const data = await response.json()
       
       if (data.success && data.data.tradeState === 'SUCCESS') {
-        toast.success('支付成功！')
-        setPayQrDialogOpen(false)
-        fetchOrders()
-      } else {
-        toast.info('暂未检测到支付，请完成扫码支付后重试')
-      }
+          // 标记刚刚完成支付
+          setJustPaid(true)
+          // 关闭二维码对话框
+          setPayQrDialogOpen(false)
+          // 显示支付成功弹窗
+          setPaymentResult({
+            success: true,
+            message: '支付成功！',
+            orderNo: payingOrder.orderNo,
+            amount: payingOrder.amount
+          })
+          setPaymentResultDialogOpen(true)
+          fetchOrders()
+        } else {
+          toast.info('暂未检测到支付，请完成扫码支付后重试')
+        }
     } catch (error) {
       console.error('检查支付状态失败:', error)
       toast.error('检查支付状态失败')
@@ -1031,6 +1066,98 @@ function OrdersPage() {
               确认支付
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 支付结果弹窗 */}
+      <Dialog open={paymentResultDialogOpen} onOpenChange={(open) => {
+        setPaymentResultDialogOpen(open)
+        if (!open) {
+          // 关闭弹窗时清空结果状态和支付标记
+          setPaymentResult(null)
+          setJustPaid(false)
+        }
+      }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader className="text-center">
+            {paymentResult?.success ? (
+              <div className="flex flex-col items-center">
+                <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-4">
+                  <CheckCircle2 className="h-10 w-10 text-green-500" />
+                </div>
+                <DialogTitle className="text-xl text-green-600 dark:text-green-400">
+                  支付成功
+                </DialogTitle>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center">
+                <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
+                  <XCircle className="h-10 w-10 text-red-500" />
+                </div>
+                <DialogTitle className="text-xl text-red-600 dark:text-red-400">
+                  支付失败
+                </DialogTitle>
+              </div>
+            )}
+          </DialogHeader>
+
+          <div className="py-4 text-center space-y-3">
+            {/* 订单信息 */}
+            {paymentResult && (
+              <div className="p-3 bg-muted/30 rounded-lg">
+                {paymentResult.orderNo && (
+                  <div className="text-sm text-muted-foreground mb-1">
+                    订单号: <span className="font-mono">{paymentResult.orderNo}</span>
+                  </div>
+                )}
+                {paymentResult.amount !== undefined && (
+                  <div className="text-lg font-medium">
+                    支付金额: <span className="text-primary font-bold">{formatPrice(paymentResult.amount)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 消息提示 */}
+            <p className="text-muted-foreground">
+              {paymentResult?.message || (paymentResult?.success ? '感谢您的购买！' : '支付未完成，请重试或联系客服')}
+            </p>
+
+            {/* 成功时显示密钥提示 */}
+            {paymentResult?.success && (
+              <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <p className="text-sm text-green-700 dark:text-green-400">
+                  您可以在订单详情中查看产品密钥
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+            <Button 
+              variant="outline" 
+              className="flex-1"
+              onClick={() => {
+                setPaymentResultDialogOpen(false)
+                router.push('/shop')
+              }}
+            >
+              <ShoppingBag className="h-4 w-4 mr-2" />
+              继续购物
+            </Button>
+            <Button 
+              className="flex-1"
+              onClick={() => {
+                setPaymentResultDialogOpen(false)
+                // 刷新订单列表以获取最新状态
+                fetchOrders()
+              }}
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              查看订单
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

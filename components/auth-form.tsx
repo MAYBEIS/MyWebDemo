@@ -3,7 +3,10 @@
 import { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Suspense } from "react"
-import { Terminal, Eye, EyeOff, Github, Mail, AlertCircle, Shield, CheckCircle, Loader2 } from "lucide-react"
+import { 
+  Terminal, Eye, EyeOff, Github, Mail, AlertCircle, Shield, CheckCircle, 
+  Loader2, Database, ArrowRight, RefreshCw, Server, Table
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,13 +18,275 @@ import { login, register, useAuth } from "@/lib/auth-store"
 
 // 设置状态接口
 interface SetupStatus {
+  setupPhase: 'database' | 'migration' | 'admin' | 'complete'
   needsSetup: boolean
-  hasUsers: boolean
   dbConnected: boolean
   dbType: 'sqlite' | 'postgresql'
+  tablesExist: {
+    users: boolean
+    posts: boolean
+    comments: boolean
+    system_settings: boolean
+    allTablesExist: boolean
+  }
+  needsMigration: boolean
+  hasAdmin: boolean
+  hasUsers: boolean
   defaultEmail?: string
   defaultName?: string
   hasDefaultPassword: boolean
+}
+
+// 步骤指示器组件
+function StepIndicator({ 
+  currentPhase 
+}: { 
+  currentPhase: 'database' | 'migration' | 'admin' | 'complete' 
+}) {
+  const steps = [
+    { key: 'database', label: '数据库连接', icon: Database },
+    { key: 'migration', label: '表结构迁移', icon: Table },
+    { key: 'admin', label: '管理员账号', icon: Shield },
+  ]
+  
+  const currentIndex = steps.findIndex(s => s.key === currentPhase)
+  
+  return (
+    <div className="flex items-center justify-center gap-2 mb-6">
+      {steps.map((step, index) => {
+        const Icon = step.icon
+        const isActive = index === currentIndex
+        const isCompleted = index < currentIndex
+        const isPending = index > currentIndex
+        
+        return (
+          <div key={step.key} className="flex items-center">
+            <div 
+              className={`
+                flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-all
+                ${isActive ? 'bg-primary text-primary-foreground' : ''}
+                ${isCompleted ? 'bg-green-500/20 text-green-600 dark:text-green-400' : ''}
+                ${isPending ? 'bg-muted text-muted-foreground' : ''}
+              `}
+            >
+              {isCompleted ? (
+                <CheckCircle className="h-4 w-4" />
+              ) : (
+                <Icon className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">{step.label}</span>
+            </div>
+            {index < steps.length - 1 && (
+              <ArrowRight className={`h-4 w-4 mx-2 ${
+                index < currentIndex ? 'text-green-500' : 'text-muted-foreground/30'
+              }`} />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// 数据库连接检查组件
+function DatabaseCheckStep({ 
+  status, 
+  onRetry 
+}: { 
+  status: SetupStatus
+  onRetry: () => void 
+}) {
+  return (
+    <div className="w-full max-w-md animate-slide-up">
+      <Card className="border-destructive/20 bg-card/50 backdrop-blur-sm">
+        <CardHeader className="text-center pb-2">
+          <div className="flex justify-center mb-4">
+            <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 border border-destructive/20">
+              <Database className="h-7 w-7 text-destructive" />
+            </div>
+          </div>
+          <CardTitle className="text-xl">数据库连接失败</CardTitle>
+          <CardDescription>
+            无法连接到数据库，请检查配置
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert className="mb-6 border-destructive/50 bg-destructive/5">
+            <AlertCircle className="h-4 w-4 text-destructive" />
+            <AlertTitle className="text-destructive">连接错误</AlertTitle>
+            <AlertDescription className="text-destructive/80 text-sm">
+              请检查 <code className="px-1 py-0.5 bg-muted rounded">.env</code> 文件中的 
+              <code className="px-1 py-0.5 bg-muted rounded">DATABASE_URL</code> 配置是否正确
+            </AlertDescription>
+          </Alert>
+
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Server className="h-4 w-4" />
+              <span>数据库类型: {status.dbType === 'sqlite' ? 'SQLite' : 'PostgreSQL'}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Database className="h-4 w-4" />
+              <span>连接状态: <span className="text-destructive">失败</span></span>
+            </div>
+          </div>
+
+          <Button
+            onClick={onRetry}
+            className="w-full h-11 mt-6"
+            variant="outline"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            重新检查连接
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// 数据库迁移组件
+function MigrationStep({ 
+  status, 
+  onMigrate, 
+  isMigrating, 
+  migrateResult,
+  onRetry 
+}: { 
+  status: SetupStatus
+  onMigrate: () => void
+  isMigrating: boolean
+  migrateResult: { success: boolean; message: string; error?: string } | null
+  onRetry: () => void
+}) {
+  const [showDetails, setShowDetails] = useState(false)
+  
+  return (
+    <div className="w-full max-w-md animate-slide-up">
+      <Card className="border-amber-500/20 bg-card/50 backdrop-blur-sm">
+        <CardHeader className="text-center pb-2">
+          <div className="flex justify-center mb-4">
+            <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/20">
+              <Table className="h-7 w-7 text-amber-500" />
+            </div>
+          </div>
+          <CardTitle className="text-xl">数据库迁移</CardTitle>
+          <CardDescription>
+            需要创建数据库表结构
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert className="mb-6 border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+            <AlertCircle className="h-4 w-4 text-amber-500" />
+            <AlertTitle className="text-amber-700 dark:text-amber-400">需要迁移</AlertTitle>
+            <AlertDescription className="text-amber-600 dark:text-amber-300 text-sm">
+              检测到数据库表不存在，需要执行数据库迁移来创建表结构
+            </AlertDescription>
+          </Alert>
+
+          {/* 表状态详情 */}
+          <div className="mb-6 p-4 rounded-lg bg-muted/50 border border-border/40">
+            <div 
+              className="flex items-center justify-between cursor-pointer"
+              onClick={() => setShowDetails(!showDetails)}
+            >
+              <span className="text-sm font-medium">表状态详情</span>
+              <Button variant="ghost" size="sm" className="h-6 px-2">
+                {showDetails ? '收起' : '展开'}
+              </Button>
+            </div>
+            {showDetails && (
+              <div className="mt-3 space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  {status.tablesExist.users ? (
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 text-amber-500" />
+                  )}
+                  <span>users 表</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {status.tablesExist.posts ? (
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 text-amber-500" />
+                  )}
+                  <span>posts 表</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {status.tablesExist.comments ? (
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 text-amber-500" />
+                  )}
+                  <span>comments 表</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {status.tablesExist.system_settings ? (
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 text-amber-500" />
+                  )}
+                  <span>system_settings 表</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 迁移结果 */}
+          {migrateResult && (
+            <Alert 
+              className={`mb-6 ${migrateResult.success 
+                ? 'border-green-500/50 bg-green-50 dark:bg-green-950/20' 
+                : 'border-destructive/50 bg-destructive/5'
+              }`}
+            >
+              {migrateResult.success ? (
+                <CheckCircle className="h-4 w-4 text-green-500" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-destructive" />
+              )}
+              <AlertDescription className={migrateResult.success ? 'text-green-700 dark:text-green-400' : 'text-destructive'}>
+                {migrateResult.message}
+                {migrateResult.error && (
+                  <div className="mt-2 text-xs opacity-75">{migrateResult.error}</div>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <div className="flex gap-3">
+            <Button
+              onClick={onRetry}
+              variant="outline"
+              className="flex-1 h-11"
+              disabled={isMigrating}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              刷新状态
+            </Button>
+            <Button
+              onClick={onMigrate}
+              className="flex-1 h-11"
+              disabled={isMigrating}
+            >
+              {isMigrating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  迁移中...
+                </>
+              ) : (
+                <>
+                  <Table className="h-4 w-4 mr-2" />
+                  执行迁移
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
 }
 
 // 初始化向导组件
@@ -122,16 +387,16 @@ function SetupWizard({
               <div className="absolute inset-0 rounded-2xl animate-glow-pulse bg-primary/5" />
             </div>
           </div>
-          <CardTitle className="text-xl">系统初始化</CardTitle>
+          <CardTitle className="text-xl">创建管理员账号</CardTitle>
           <CardDescription>
-            检测到系统尚未初始化，请创建第一个管理员账号
+            创建第一个管理员账号来完成系统初始化
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Alert className="mb-6 border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
-            <AlertCircle className="h-4 w-4 text-amber-500" />
-            <AlertTitle className="text-amber-700 dark:text-amber-400">首次部署</AlertTitle>
-            <AlertDescription className="text-amber-600 dark:text-amber-300 text-sm">
+          <Alert className="mb-6 border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
+            <Shield className="h-4 w-4 text-blue-500" />
+            <AlertTitle className="text-blue-700 dark:text-blue-400">最后一步</AlertTitle>
+            <AlertDescription className="text-blue-600 dark:text-blue-300 text-sm">
               这是系统的第一个账号，将自动获得管理员权限
               <br />
               <span className="text-xs opacity-75">
@@ -260,7 +525,10 @@ function AuthFormInner() {
   // 设置状态
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null)
   const [checkingSetup, setCheckingSetup] = useState(true)
-  const [showSetup, setShowSetup] = useState(false)
+  
+  // 迁移状态
+  const [isMigrating, setIsMigrating] = useState(false)
+  const [migrateResult, setMigrateResult] = useState<{ success: boolean; message: string; error?: string } | null>(null)
   
   // 表单字段
   const [username, setUsername] = useState("")
@@ -269,26 +537,25 @@ function AuthFormInner() {
   const [confirmPassword, setConfirmPassword] = useState("")
 
   // 检查是否需要初始化
-  useEffect(() => {
-    const checkSetup = async () => {
-      try {
-        const response = await fetch("/api/setup/status")
-        if (response.ok) {
-          const data = await response.json()
-          setSetupStatus(data)
-          setShowSetup(data.needsSetup)
-          
-          // 如果有默认值，预填充
-          if (data.defaultEmail) setEmail(data.defaultEmail)
-          if (data.defaultName) setUsername(data.defaultName)
-        }
-      } catch (err) {
-        console.error("Failed to check setup status:", err)
-      } finally {
-        setCheckingSetup(false)
+  const checkSetup = async () => {
+    try {
+      const response = await fetch("/api/setup/status")
+      if (response.ok) {
+        const data = await response.json()
+        setSetupStatus(data)
+        
+        // 如果有默认值，预填充
+        if (data.defaultEmail) setEmail(data.defaultEmail)
+        if (data.defaultName) setUsername(data.defaultName)
       }
+    } catch (err) {
+      console.error("Failed to check setup status:", err)
+    } finally {
+      setCheckingSetup(false)
     }
-    
+  }
+  
+  useEffect(() => {
     checkSetup()
   }, [])
 
@@ -303,6 +570,42 @@ function AuthFormInner() {
   useEffect(() => {
     setError(null)
   }, [activeTab, email, password, username, confirmPassword])
+
+  // 执行数据库迁移
+  const handleMigrate = async () => {
+    setIsMigrating(true)
+    setMigrateResult(null)
+    
+    try {
+      const response = await fetch("/api/setup/migrate", {
+        method: "POST",
+      })
+      const data = await response.json()
+      
+      setMigrateResult({
+        success: data.success,
+        message: data.message || (data.success ? '迁移成功' : '迁移失败'),
+        error: data.error || data.details,
+      })
+      
+      if (data.success) {
+        toast.success("数据库迁移成功！")
+        // 刷新状态
+        setTimeout(() => {
+          checkSetup()
+        }, 1000)
+      }
+    } catch (err) {
+      console.error("Migration failed:", err)
+      setMigrateResult({
+        success: false,
+        message: '迁移请求失败',
+        error: err instanceof Error ? err.message : '网络错误',
+      })
+    } finally {
+      setIsMigrating(false)
+    }
+  }
 
   // 表单验证
   const validateForm = (): boolean => {
@@ -388,19 +691,7 @@ function AuthFormInner() {
 
   // 初始化完成后刷新状态
   const handleSetupComplete = async () => {
-    setShowSetup(false)
-    setCheckingSetup(true)
-    try {
-      const response = await fetch("/api/setup/status")
-      if (response.ok) {
-        const data = await response.json()
-        setSetupStatus(data)
-      }
-    } catch (err) {
-      console.error("Failed to refresh setup status:", err)
-    } finally {
-      setCheckingSetup(false)
-    }
+    await checkSetup()
   }
 
   // 加载中状态
@@ -417,16 +708,41 @@ function AuthFormInner() {
     return null
   }
 
-  // 显示初始化向导
-  if (showSetup && setupStatus) {
+  // 显示流程引导式初始化
+  if (setupStatus && setupStatus.needsSetup) {
+    const { setupPhase } = setupStatus
+    
     return (
-      <SetupWizard 
-        defaultEmail={setupStatus.defaultEmail}
-        defaultName={setupStatus.defaultName}
-        hasDefaultPassword={setupStatus.hasDefaultPassword}
-        dbType={setupStatus.dbType}
-        onComplete={handleSetupComplete}
-      />
+      <div className="w-full max-w-lg">
+        <StepIndicator currentPhase={setupPhase} />
+        
+        {setupPhase === 'database' && (
+          <DatabaseCheckStep 
+            status={setupStatus}
+            onRetry={checkSetup}
+          />
+        )}
+        
+        {setupPhase === 'migration' && (
+          <MigrationStep 
+            status={setupStatus}
+            onMigrate={handleMigrate}
+            isMigrating={isMigrating}
+            migrateResult={migrateResult}
+            onRetry={checkSetup}
+          />
+        )}
+        
+        {setupPhase === 'admin' && (
+          <SetupWizard 
+            defaultEmail={setupStatus.defaultEmail}
+            defaultName={setupStatus.defaultName}
+            hasDefaultPassword={setupStatus.hasDefaultPassword}
+            dbType={setupStatus.dbType}
+            onComplete={handleSetupComplete}
+          />
+        )}
+      </div>
     )
   }
 

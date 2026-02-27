@@ -129,6 +129,9 @@ model users {
   product_keys    product_keys[]
   user_memberships user_memberships?
   user_coupons    user_coupons[]
+  topic_comments topic_comments[]
+  topic_votes    topic_votes[]
+  topic_votes_multiple topic_votes_multiple[]
 
   @@index([isBanned])
 }
@@ -306,4 +309,92 @@ model user_coupons {
   @@unique([userId, couponId])
   @@index([userId])
   @@index([status])
+}
+
+// 热榜话题
+model trending_topics {
+  id          String   @id
+  title       String   // 话题标题
+  description String   // 话题描述
+  category    String   // 分类
+  voteType    String   @default("binary")  // 投票类型: binary(赞同/否定), multiple(多选一)
+  options     String?  // 投票选项JSON数组（仅多选一类型使用）
+  votes       Int      @default(0)  // 票数（赞同-反对）
+  heat        Int      @default(0)  // 热度值
+  tags        String?  // 标签JSON数组
+  proposedBy  String   // 提出者
+  status      String   @default("active") // active, closed
+  startTime   DateTime @default(now()) // 开始时间
+  endTime     DateTime? // 结束时间
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  topic_comments topic_comments[]
+  topic_votes topic_votes[]
+  topic_options topic_options[]
+  topic_votes_multiple topic_votes_multiple[]
+
+  @@index([category])
+  @@index([status])
+  @@index([endTime])
+}
+
+// 话题评论
+model topic_comments {
+  id        String   @id
+  topicId   String
+  userId    String
+  content   String   // 评论内容
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  trending_topics trending_topics @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([topicId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// 话题投票记录
+model topic_votes {
+  id        String   @id
+  topicId   String
+  userId    String
+  direction String   // up (赞同) 或 down (反对)
+  createdAt DateTime @default(now())
+  trending_topics trending_topics @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([topicId, userId])  // 同一用户对同一话题只能投一票（binary类型）
+  @@index([topicId])
+  @@index([userId])
+}
+
+// 投票选项（用于多选一投票）
+model topic_options {
+  id        String   @id
+  topicId   String
+  text      String   // 选项文本
+  votes     Int      @default(0)  // 投票数
+  createdAt DateTime @default(now())
+  topic_votes_multiple topic_votes_multiple[]
+  trending_topics trending_topics @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@index([topicId])
+}
+
+// 多选一投票记录
+model topic_votes_multiple {
+  id        String   @id
+  topicId   String
+  optionId  String
+  userId    String
+  createdAt DateTime @default(now())
+  topic_options topic_options @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  trending_topics trending_topics @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([topicId, userId])  // 同一用户对同一话题只能投一票
+  @@index([topicId])
+  @@index([userId])
+  @@index([optionId])
 }
